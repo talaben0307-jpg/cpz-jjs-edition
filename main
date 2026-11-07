@@ -1,100 +1,147 @@
--- ============================================================================
--- 🔥 JJS EDITION BY ZELYNX (FULL MERGED SCRIPT - CPZ CUSTOM UI)
--- 🔐 Premium Key: 0946
--- ============================================================================
+--[[
+    CPZ Menu - JJS Edition by Zelynx (Universe Hub V5.4 Pro Engine)
+    Full 12 Modules + Original Background Presets & Settings
+    Premium Tab Key: 0946
+]]
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local StatsService = game:GetService("Stats")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
-
 local LocalPlayer = Players.LocalPlayer
 
-local function getGuiParent()
-    if gethui then
-        local ok, hui = pcall(gethui)
-        if ok and hui then return hui end
+local env = (getgenv and getgenv()) or _G
+if env.UniverseCleanup then
+    pcall(env.UniverseCleanup)
+end
+
+local parentGui = (gethui and gethui()) or CoreGui
+local connections, cleanups, spinners = {}, {}, {}
+
+local function track(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local function onCleanup(fn)
+    table.insert(cleanups, fn)
+end
+
+env.UniverseCleanup = function()
+    for _, c in ipairs(connections) do
+        pcall(function() c:Disconnect() end)
     end
-    local ok, core = pcall(function() return CoreGui end)
-    if ok and core then return core end
-    return LocalPlayer:WaitForChild("PlayerGui", 5)
+    table.clear(connections)
+    for _, fn in ipairs(cleanups) do
+        pcall(fn)
+    end
+    table.clear(cleanups)
+    table.clear(spinners)
+    env.UniverseCleanup = nil
 end
 
--- Dọn dẹp UI cũ nếu chạy lại
-local guiParent = getGuiParent()
-if guiParent:FindFirstChild("Zelynx_CPZ_UI") then
-    pcall(function() guiParent.Zelynx_CPZ_UI:Destroy() end)
+local requestFn = (syn and syn.request) or (http and http.request) or http_request or request
+
+local function httpGet(url)
+    if requestFn then
+        local ok, res = pcall(requestFn, { Url = url, Method = "GET" })
+        if ok and res and res.StatusCode == 200 and res.Body then
+            return res.Body
+        end
+    end
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    return ok and body or nil
 end
-
--- ============================================================================
--- CÀI ĐẶT GIAO DIỆN & HÌNH NỀN MẶC ĐỊNH (CPZ STYLE)
--- ============================================================================
-local UI_Settings = {
-    AccentColor = Color3.fromRGB(160, 80, 255),
-    BgColor = Color3.fromRGB(14, 14, 20),
-    PanelColor = Color3.fromRGB(22, 22, 30),
-    CardColor = Color3.fromRGB(28, 28, 38),
-    TextColor = Color3.fromRGB(240, 240, 250),
-    SubTextColor = Color3.fromRGB(165, 165, 185),
-    BgImage = "rbxassetid://15906773556",
-    BgTransparency = 0.65,
-    WindowTransparency = 0.08,
-    RainbowStroke = true,
-    ToggleKey = Enum.KeyCode.RightShift
-}
-
-local Connections = {}
-local function trackConn(c)
-    table.insert(Connections, c)
-    return c
-end
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Zelynx_CPZ_UI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.DisplayOrder = 9999
-ScreenGui.Parent = guiParent
 
 local function Notify(title, text, duration)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = title or "JJS Edition by Zelynx",
+            Title = title or "CPZ Menu",
             Text = text or "",
             Duration = duration or 3
         })
     end)
 end
 
-local function makeDraggable(dragHandle, targetFrame, onTapCallback)
-    local dragging = false
-    local dragInput, dragStart, startPos
+-- ===== CPZ Menu Original Theme =====
+local Theme = {
+    Background = Color3.fromRGB(11, 11, 18),
+    Panel = Color3.fromRGB(18, 18, 28),
+    PanelAlt = Color3.fromRGB(26, 22, 42),
+    Element = Color3.fromRGB(26, 26, 40),
+    ElementHover = Color3.fromRGB(38, 38, 58),
+    Off = Color3.fromRGB(54, 54, 76),
+    Stroke = Color3.fromRGB(46, 46, 68),
+    Accent = Color3.fromRGB(0, 229, 255),
+    AccentDim = Color3.fromRGB(0, 96, 118),
+    Accent2 = Color3.fromRGB(170, 80, 255),
+    Text = Color3.fromRGB(240, 240, 248),
+    SubText = Color3.fromRGB(150, 150, 176),
+    Danger = Color3.fromRGB(255, 70, 90),
+    Good = Color3.fromRGB(70, 220, 130),
+    Warn = Color3.fromRGB(255, 190, 60),
+}
+
+local ACCENT_GRADIENT = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Theme.Accent),
+    ColorSequenceKeypoint.new(0.5, Theme.Accent2),
+    ColorSequenceKeypoint.new(1, Theme.Accent),
+})
+
+local function create(class, props, children)
+    local inst = Instance.new(class)
+    if inst:IsA("GuiObject") then
+        inst.BorderSizePixel = 0
+    end
+    local parent
+    for k, v in pairs(props or {}) do
+        if k == "Parent" then
+            parent = v
+        else
+            inst[k] = v
+        end
+    end
+    for _, child in ipairs(children or {}) do
+        child.Parent = inst
+    end
+    if parent then
+        inst.Parent = parent
+    end
+    return inst
+end
+
+local function makeDraggable(handle, target, onTap)
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     local moved = false
 
-    dragHandle.InputBegan:Connect(function(input)
+    track(handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             moved = false
             dragStart = input.Position
-            startPos = targetFrame.Position
+            startPos = target.Position
         end
-    end)
+    end))
 
-    dragHandle.InputChanged:Connect(function(input)
+    track(handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
-    end)
+    end))
 
-    trackConn(UserInputService.InputChanged:Connect(function(input)
+    track(UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
             if delta.Magnitude > 6 then
                 moved = true
-                targetFrame.Position = UDim2.new(
+                target.Position = UDim2.new(
                     startPos.X.Scale, startPos.X.Offset + delta.X,
                     startPos.Y.Scale, startPos.Y.Offset + delta.Y
                 )
@@ -102,891 +149,1153 @@ local function makeDraggable(dragHandle, targetFrame, onTapCallback)
         end
     end))
 
-    trackConn(UserInputService.InputEnded:Connect(function(input)
+    track(UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if dragging then
                 dragging = false
-                if not moved and onTapCallback then
-                    onTapCallback()
+                if not moved and onTap then
+                    onTap()
                 end
             end
         end
     end))
 end
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.fromOffset(580, 370)
-MainFrame.Position = UDim2.fromScale(0.5, 0.5)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.BackgroundColor3 = UI_Settings.BgColor
-MainFrame.BackgroundTransparency = UI_Settings.WindowTransparency
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+-- ===== CPZ Menu Library =====
+local Library = {}
 
-local MainStroke = Instance.new("UIStroke", MainFrame)
-MainStroke.Color = UI_Settings.AccentColor
-MainStroke.Thickness = 2
+function Library:CreateWindow(cfg)
+    cfg = cfg or {}
+    local title = cfg.Title or "CPZ Menu"
+    local subTitle = cfg.SubTitle or "JJS Edition by Zelynx"
+    local menuKey = cfg.MenuKey or Enum.KeyCode.F
+    local visible = true
 
-local BgImageLabel = Instance.new("ImageLabel")
-BgImageLabel.Name = "CustomBackground"
-BgImageLabel.Size = UDim2.fromScale(1, 1)
-BgImageLabel.BackgroundTransparency = 1
-BgImageLabel.Image = UI_Settings.BgImage
-BgImageLabel.ImageTransparency = UI_Settings.BgTransparency
-BgImageLabel.ScaleType = Enum.ScaleType.Crop
-BgImageLabel.ZIndex = 0
-BgImageLabel.Parent = MainFrame
-Instance.new("UICorner", BgImageLabel).CornerRadius = UDim.new(0, 10)
+    local MainGui = create("ScreenGui", {
+        Name = "UniverseHub", ResetOnSpawn = false, IgnoreGuiInset = true,
+        DisplayOrder = 100, Enabled = true, Parent = parentGui,
+    })
+    local FloatGui = create("ScreenGui", {
+        Name = "UniverseFloat", ResetOnSpawn = false, IgnoreGuiInset = true,
+        DisplayOrder = 110, Enabled = true, Parent = parentGui,
+    })
+    local PillGui = create("ScreenGui", {
+        Name = "UniverseTopPill", ResetOnSpawn = false, IgnoreGuiInset = true,
+        DisplayOrder = 95, Enabled = true, Parent = parentGui,
+    })
 
-local FloatBtn = Instance.new("TextButton")
-FloatBtn.Name = "ToggleMenuBtn"
-FloatBtn.Size = UDim2.fromOffset(48, 48)
-FloatBtn.Position = UDim2.new(0, 25, 0.5, -24)
-FloatBtn.BackgroundColor3 = UI_Settings.BgColor
-FloatBtn.Text = "ZLX"
-FloatBtn.Font = Enum.Font.GothamBlack
-FloatBtn.TextSize = 13
-FloatBtn.TextColor3 = UI_Settings.AccentColor
-FloatBtn.AutoButtonColor = false
-FloatBtn.Parent = ScreenGui
-Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 10)
+    onCleanup(function()
+        pcall(function() MainGui:Destroy() end)
+        pcall(function() FloatGui:Destroy() end)
+        pcall(function() PillGui:Destroy() end)
+    end)
 
-local FloatStroke = Instance.new("UIStroke", FloatBtn)
-FloatStroke.Color = UI_Settings.AccentColor
-FloatStroke.Thickness = 1.8
+    -- Top Pill Bar
+    local TopPill = create("Frame", {
+        Size = UDim2.fromOffset(360, 32),
+        Position = UDim2.new(0.5, 0, 0, 10),
+        AnchorPoint = Vector2.new(0.5, 0),
+        BackgroundColor3 = Theme.Panel,
+        BackgroundTransparency = 0.1,
+        Parent = PillGui,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+    })
+    local pillStroke = create("UIStroke", {
+        Thickness = 1.6, Color = Color3.new(1, 1, 1), Parent = TopPill,
+    })
+    local pillGrad = create("UIGradient", {
+        Color = ACCENT_GRADIENT, Rotation = 0, Parent = pillStroke,
+    })
+    table.insert(spinners, pillGrad)
 
-makeDraggable(FloatBtn, FloatBtn, function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
+    local PillText = create("TextLabel", {
+        Size = UDim2.new(1, -24, 1, 0),
+        Position = UDim2.fromOffset(12, 0),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "⚡ CPZ Menu | JJS Edition by Zelynx | FPS: 60 | Ping: 0ms",
+        TextColor3 = Theme.Text,
+        TextSize = 11,
+        Parent = TopPill,
+    })
 
-trackConn(UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == UI_Settings.ToggleKey then
-        MainFrame.Visible = not MainFrame.Visible
+    -- Draggable Floating "HUB" Button
+    local FloatBtn = create("TextButton", {
+        Size = UDim2.fromOffset(52, 52),
+        Position = UDim2.new(0, 22, 0.5, -26),
+        BackgroundColor3 = Theme.Panel,
+        Font = Enum.Font.GothamBlack,
+        Text = "HUB",
+        TextColor3 = Theme.Accent,
+        TextSize = 13,
+        AutoButtonColor = false,
+        Parent = FloatGui,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 14) }),
+    })
+    local floatStroke = create("UIStroke", {
+        Thickness = 2, Color = Color3.new(1, 1, 1), Parent = FloatBtn,
+    })
+    local floatGrad = create("UIGradient", {
+        Color = ACCENT_GRADIENT, Rotation = 45, Parent = floatStroke,
+    })
+    table.insert(spinners, floatGrad)
+
+    -- Main Window Frame
+    local MainFrame = create("Frame", {
+        Name = "MainFrame",
+        Size = UDim2.fromOffset(620, 400),
+        Position = UDim2.fromScale(0.5, 0.52),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.06,
+        ClipsDescendants = true,
+        Parent = MainGui,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 12) }),
+    })
+
+    local mainStroke = create("UIStroke", {
+        Thickness = 2, Color = Color3.new(1, 1, 1), Parent = MainFrame,
+    })
+    local mainGrad = create("UIGradient", {
+        Color = ACCENT_GRADIENT, Rotation = 0, Parent = mainStroke,
+    })
+    table.insert(spinners, mainGrad)
+
+    -- Background Image Layer
+    local BgImage = create("ImageLabel", {
+        Name = "BgImage",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Image = "",
+        ImageTransparency = 0.45,
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 1,
+        Parent = MainFrame,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 12) }),
+    })
+
+    local BgShade = create("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.35,
+        ZIndex = 1,
+        Parent = MainFrame,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 12) }),
+    })
+
+    -- Header
+    local Header = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 46),
+        BackgroundColor3 = Theme.Panel,
+        BackgroundTransparency = 0.15,
+        ZIndex = 2,
+        Parent = MainFrame,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 12) }),
+    })
+
+    create("TextLabel", {
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.fromOffset(16, 0),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBlack,
+        Text = title,
+        TextColor3 = Theme.Accent,
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 3,
+        Parent = Header,
+    })
+
+    create("TextLabel", {
+        Size = UDim2.new(0, 280, 1, 0),
+        Position = UDim2.fromOffset(110, 1),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "•  " .. subTitle,
+        TextColor3 = Theme.Accent2,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 3,
+        Parent = Header,
+    })
+
+    local MinBtn = create("TextButton", {
+        Size = UDim2.fromOffset(28, 28),
+        Position = UDim2.new(1, -68, 0.5, -14),
+        BackgroundColor3 = Theme.Element,
+        Font = Enum.Font.GothamBold,
+        Text = "—",
+        TextColor3 = Theme.Text,
+        TextSize = 13,
+        ZIndex = 3,
+        Parent = Header,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+    })
+
+    local CloseBtn = create("TextButton", {
+        Size = UDim2.fromOffset(28, 28),
+        Position = UDim2.new(1, -36, 0.5, -14),
+        BackgroundColor3 = Theme.Danger,
+        Font = Enum.Font.GothamBold,
+        Text = "✕",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 13,
+        ZIndex = 3,
+        Parent = Header,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+    })
+
+    -- Sidebar
+    local Sidebar = create("ScrollingFrame", {
+        Size = UDim2.new(0, 155, 1, -60),
+        Position = UDim2.fromOffset(10, 52),
+        BackgroundColor3 = Theme.Panel,
+        BackgroundTransparency = 0.22,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Accent,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ZIndex = 2,
+        Parent = MainFrame,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 10) }),
+        create("UIPadding", {
+            PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
+            PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
+        }),
+        create("UIListLayout", {
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        }),
+    })
+
+    -- Content Area
+    local ContentHolder = create("Frame", {
+        Size = UDim2.new(1, -183, 1, -60),
+        Position = UDim2.fromOffset(173, 52),
+        BackgroundColor3 = Theme.Panel,
+        BackgroundTransparency = 0.28,
+        ZIndex = 2,
+        Parent = MainFrame,
+    }, {
+        create("UICorner", { CornerRadius = UDim.new(0, 10) }),
+    })
+
+    local function toggleVisibility(state)
+        if state == nil then visible = not visible else visible = state end
+        MainFrame.Visible = visible
     end
-end))
 
-trackConn(RunService.RenderStepped:Connect(function()
-    if UI_Settings.RainbowStroke then
-        local hue = (tick() * 0.18) % 1
-        local col = Color3.fromHSV(hue, 0.75, 1)
-        MainStroke.Color = col
-        FloatStroke.Color = col
-    else
-        MainStroke.Color = UI_Settings.AccentColor
-        FloatStroke.Color = UI_Settings.AccentColor
-    end
-end))
+    MinBtn.MouseButton1Click:Connect(function() toggleVisibility(false) end)
+    CloseBtn.MouseButton1Click:Connect(function()
+        if env.UniverseCleanup then env.UniverseCleanup() end
+    end)
 
-local Topbar = Instance.new("Frame")
-Topbar.Name = "Topbar"
-Topbar.Size = UDim2.new(1, 0, 0, 42)
-Topbar.BackgroundColor3 = UI_Settings.PanelColor
-Topbar.BackgroundTransparency = 0.15
-Topbar.BorderSizePixel = 0
-Topbar.ZIndex = 2
-Topbar.Parent = MainFrame
-Instance.new("UICorner", Topbar).CornerRadius = UDim.new(0, 10)
+    makeDraggable(Header, MainFrame)
+    makeDraggable(FloatBtn, FloatBtn, function() toggleVisibility() end)
+    makeDraggable(TopPill, TopPill, function() toggleVisibility() end)
 
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -100, 1, 0)
-TitleLabel.Position = UDim2.fromOffset(14, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "🔥 JJS Edition by Zelynx  |  CPZ Custom UI (FULL SOURCE)"
-TitleLabel.TextColor3 = UI_Settings.TextColor
-TitleLabel.TextSize = 14
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.ZIndex = 3
-TitleLabel.Parent = Topbar
+    local Window = {
+        MainGui = MainGui,
+        FloatGui = FloatGui,
+        PillGui = PillGui,
+        MainFrame = MainFrame,
+        BgImage = BgImage,
+        BgShade = BgShade,
+        MenuKey = menuKey,
+        Tabs = {},
+        SetVisible = function(_, v) toggleVisibility(v) end,
+        SetMenuKey = function(self, k) self.MenuKey = k end,
+    }
 
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.fromOffset(26, 26)
-MinBtn.Position = UDim2.new(1, -66, 0.5, -13)
-MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.Text = "—"
-MinBtn.TextColor3 = UI_Settings.TextColor
-MinBtn.TextSize = 12
-MinBtn.ZIndex = 3
-MinBtn.Parent = Topbar
-Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
-MinBtn.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.fromOffset(26, 26)
-CloseBtn.Position = UDim2.new(1, -34, 0.5, -13)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 70)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.TextSize = 12
-CloseBtn.ZIndex = 3
-CloseBtn.Parent = Topbar
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-CloseBtn.MouseButton1Click:Connect(function()
-    for _, c in ipairs(Connections) do pcall(function() c:Disconnect() end) end
-    ScreenGui:Destroy()
-end)
-
-makeDraggable(Topbar, MainFrame)
-
-local Sidebar = Instance.new("ScrollingFrame")
-Sidebar.Name = "Sidebar"
-Sidebar.Size = UDim2.new(0, 145, 1, -54)
-Sidebar.Position = UDim2.fromOffset(8, 48)
-Sidebar.BackgroundColor3 = UI_Settings.PanelColor
-Sidebar.BackgroundTransparency = 0.25
-Sidebar.BorderSizePixel = 0
-Sidebar.ScrollBarThickness = 2
-Sidebar.ScrollBarImageColor3 = UI_Settings.AccentColor
-Sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
-Sidebar.ZIndex = 2
-Sidebar.Parent = MainFrame
-Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 8)
-
-local SidePadding = Instance.new("UIPadding", Sidebar)
-SidePadding.PaddingTop = UDim.new(0, 6)
-SidePadding.PaddingBottom = UDim.new(0, 6)
-SidePadding.PaddingLeft = UDim.new(0, 6)
-SidePadding.PaddingRight = UDim.new(0, 6)
-
-local SideLayout = Instance.new("UIListLayout", Sidebar)
-SideLayout.Padding = UDim.new(0, 5)
-SideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local PagesHolder = Instance.new("Frame")
-PagesHolder.Name = "PagesHolder"
-PagesHolder.Size = UDim2.new(1, -169, 1, -54)
-PagesHolder.Position = UDim2.fromOffset(161, 48)
-PagesHolder.BackgroundColor3 = UI_Settings.PanelColor
-PagesHolder.BackgroundTransparency = 0.35
-PagesHolder.BorderSizePixel = 0
-PagesHolder.ZIndex = 2
-PagesHolder.Parent = MainFrame
-Instance.new("UICorner", PagesHolder).CornerRadius = UDim.new(0, 8)
-
-local AllTabs = {}
-local ActiveTab = nil
-
-local function CreateCustomTab(tabName)
-    local TabBtn = Instance.new("TextButton")
-    TabBtn.Size = UDim2.new(1, 0, 0, 32)
-    TabBtn.BackgroundColor3 = UI_Settings.CardColor
-    TabBtn.BackgroundTransparency = 0.3
-    TabBtn.Font = Enum.Font.GothamSemibold
-    TabBtn.Text = "  " .. tabName
-    TabBtn.TextColor3 = UI_Settings.SubTextColor
-    TabBtn.TextSize = 12
-    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
-    TabBtn.AutoButtonColor = false
-    TabBtn.ZIndex = 3
-    TabBtn.Parent = Sidebar
-    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
-
-    local Page = Instance.new("ScrollingFrame")
-    Page.Name = tabName .. "_Page"
-    Page.Size = UDim2.new(1, -12, 1, -12)
-    Page.Position = UDim2.fromOffset(6, 6)
-    Page.BackgroundTransparency = 1
-    Page.BorderSizePixel = 0
-    Page.ScrollBarThickness = 3
-    Page.ScrollBarImageColor3 = UI_Settings.AccentColor
-    Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Page.Visible = false
-    Page.ZIndex = 3
-    Page.Parent = PagesHolder
-
-    local PageLayout = Instance.new("UIListLayout", Page)
-    PageLayout.Padding = UDim.new(0, 6)
-    PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-    local PagePad = Instance.new("UIPadding", Page)
-    PagePad.PaddingRight = UDim.new(0, 6)
-    PagePad.PaddingBottom = UDim.new(0, 6)
-
-    local function SelectThisTab()
-        for _, t in ipairs(AllTabs) do
-            t.Page.Visible = false
-            t.Btn.BackgroundColor3 = UI_Settings.CardColor
-            t.Btn.BackgroundTransparency = 0.3
-            t.Btn.TextColor3 = UI_Settings.SubTextColor
+    track(UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and UserInputService:GetFocusedTextBox() == nil then
+            if input.KeyCode == Window.MenuKey then
+                toggleVisibility()
+            end
         end
-        Page.Visible = true
-        TabBtn.BackgroundColor3 = UI_Settings.AccentColor
-        TabBtn.BackgroundTransparency = 0.1
-        TabBtn.TextColor3 = Color3.new(1, 1, 1)
-        ActiveTab = Page
-    end
+    end))
 
-    TabBtn.MouseButton1Click:Connect(SelectThisTab)
-    table.insert(AllTabs, { Btn = TabBtn, Page = Page })
-    if #AllTabs == 1 then SelectThisTab() end
-
-    local TabAPI = {}
-
-    function TabAPI:CreateSection(secTitle)
-        local SecLbl = Instance.new("TextLabel")
-        SecLbl.Size = UDim2.new(1, 0, 0, 22)
-        SecLbl.BackgroundTransparency = 1
-        SecLbl.Font = Enum.Font.GothamBold
-        SecLbl.Text = "⚡ " .. tostring(secTitle)
-        SecLbl.TextColor3 = UI_Settings.AccentColor
-        SecLbl.TextSize = 12
-        SecLbl.TextXAlignment = Enum.TextXAlignment.Left
-        SecLbl.ZIndex = 3
-        SecLbl.Parent = Page
-    end
-
-    function TabAPI:CreateParagraph(cfg)
-        cfg = cfg or {}
-        local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 44)
-        Card.BackgroundColor3 = UI_Settings.CardColor
-        Card.BackgroundTransparency = 0.2
-        Card.ZIndex = 3
-        Card.Parent = Page
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 6)
-
-        local T = Instance.new("TextLabel", Card)
-        T.Size = UDim2.new(1, -16, 0, 18)
-        T.Position = UDim2.fromOffset(8, 4)
-        T.BackgroundTransparency = 1
-        T.Font = Enum.Font.GothamBold
-        T.Text = tostring(cfg.Title or "Info")
-        T.TextColor3 = UI_Settings.TextColor
-        T.TextSize = 12
-        T.TextXAlignment = Enum.TextXAlignment.Left
-        T.ZIndex = 3
-
-        local C = Instance.new("TextLabel", Card)
-        C.Size = UDim2.new(1, -16, 0, 20)
-        C.Position = UDim2.fromOffset(8, 21)
-        C.BackgroundTransparency = 1
-        C.Font = Enum.Font.Gotham
-        C.Text = tostring(cfg.Content or "")
-        C.TextColor3 = UI_Settings.SubTextColor
-        C.TextSize = 11
-        C.TextWrapped = true
-        C.TextXAlignment = Enum.TextXAlignment.Left
-        C.ZIndex = 3
-    end
-
-    function TabAPI:CreateButton(cfg)
-        cfg = cfg or {}
-        local Btn = Instance.new("TextButton")
-        Btn.Size = UDim2.new(1, 0, 0, 34)
-        Btn.BackgroundColor3 = UI_Settings.CardColor
-        Btn.BackgroundTransparency = 0.15
-        Btn.Font = Enum.Font.GothamSemibold
-        Btn.Text = "  🔘  " .. tostring(cfg.Name or "Button")
-        Btn.TextColor3 = UI_Settings.TextColor
-        Btn.TextSize = 12
-        Btn.TextXAlignment = Enum.TextXAlignment.Left
-        Btn.AutoButtonColor = false
-        Btn.ZIndex = 3
-        Btn.Parent = Page
-        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-
-        Btn.MouseButton1Click:Connect(function()
-            TweenService:Create(Btn, TweenInfo.new(0.1), {BackgroundColor3 = UI_Settings.AccentColor}):Play()
-            task.delay(0.12, function()
-                TweenService:Create(Btn, TweenInfo.new(0.15), {BackgroundColor3 = UI_Settings.CardColor}):Play()
+    local fpsCount = 0
+    local lastFpsTime = os.clock()
+    track(RunService.RenderStepped:Connect(function()
+        fpsCount = fpsCount + 1
+        local now = os.clock()
+        local rot = (now * 65) % 360
+        for _, grad in ipairs(spinners) do
+            if grad and grad.Parent then grad.Rotation = rot end
+        end
+        if now - lastFpsTime >= 0.5 then
+            local fps = math.floor(fpsCount / (now - lastFpsTime))
+            fpsCount = 0
+            lastFpsTime = now
+            local ping = 0
+            pcall(function()
+                ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
             end)
-            if cfg.Callback then task.spawn(cfg.Callback) end
-        end)
-        return Btn
-    end
+            PillText.Text = string.format("⚡ %s | %s | FPS: %d | Ping: %dms", title, subTitle, fps, ping)
+        end
+    end))
 
-    function TabAPI:CreateToggle(cfg)
-        cfg = cfg or {}
-        local state = cfg.CurrentValue or cfg.Default or false
+    function Window:AddTab(tabCfg)
+        local tabTitle = type(tabCfg) == "table" and (tabCfg.Title or tabCfg.Name or "Tab") or tostring(tabCfg)
+        local tabIcon = type(tabCfg) == "table" and (tabCfg.Icon or "⚡") or "⚡"
 
-        local Card = Instance.new("TextButton")
-        Card.Size = UDim2.new(1, 0, 0, 36)
-        Card.BackgroundColor3 = UI_Settings.CardColor
-        Card.BackgroundTransparency = 0.15
-        Card.Text = ""
-        Card.AutoButtonColor = false
-        Card.ZIndex = 3
-        Card.Parent = Page
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 6)
+        local TabBtn = create("TextButton", {
+            Size = UDim2.new(1, 0, 0, 34),
+            BackgroundColor3 = Theme.Element,
+            BackgroundTransparency = 0.25,
+            Font = Enum.Font.GothamSemibold,
+            Text = "  " .. tabIcon .. "  " .. tabTitle,
+            TextColor3 = Theme.SubText,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            AutoButtonColor = false,
+            ZIndex = 3,
+            Parent = Sidebar,
+        }, {
+            create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+        })
 
-        local Lbl = Instance.new("TextLabel", Card)
-        Lbl.Size = UDim2.new(1, -65, 1, 0)
-        Lbl.Position = UDim2.fromOffset(10, 0)
-        Lbl.BackgroundTransparency = 1
-        Lbl.Font = Enum.Font.GothamSemibold
-        Lbl.Text = tostring(cfg.Name or cfg.Text or "Toggle")
-        Lbl.TextColor3 = UI_Settings.TextColor
-        Lbl.TextSize = 12
-        Lbl.TextXAlignment = Enum.TextXAlignment.Left
-        Lbl.ZIndex = 3
+        local Indicator = create("Frame", {
+            Size = UDim2.new(0, 3, 0.6, 0),
+            Position = UDim2.new(0, 2, 0.2, 0),
+            BackgroundColor3 = Theme.Accent,
+            Visible = false,
+            ZIndex = 4,
+            Parent = TabBtn,
+        }, {
+            create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+        })
 
-        local Switch = Instance.new("Frame", Card)
-        Switch.Size = UDim2.fromOffset(40, 20)
-        Switch.Position = UDim2.new(1, -50, 0.5, -10)
-        Switch.BackgroundColor3 = state and UI_Settings.AccentColor or Color3.fromRGB(50, 50, 65)
-        Switch.ZIndex = 3
-        Instance.new("UICorner", Switch).CornerRadius = UDim.new(1, 0)
+        local Page = create("ScrollingFrame", {
+            Name = tabTitle .. "_Page",
+            Size = UDim2.new(1, -16, 1, -16),
+            Position = UDim2.fromOffset(8, 8),
+            BackgroundTransparency = 1,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = Theme.Accent,
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Visible = false,
+            ZIndex = 3,
+            Parent = ContentHolder,
+        }, {
+            create("UIListLayout", {
+                Padding = UDim.new(0, 7),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            }),
+            create("UIPadding", {
+                PaddingRight = UDim.new(0, 6),
+                PaddingBottom = UDim.new(0, 8),
+            }),
+        })
 
-        local Knob = Instance.new("Frame", Switch)
-        Knob.Size = UDim2.fromOffset(14, 14)
-        Knob.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-        Knob.BackgroundColor3 = Color3.new(1, 1, 1)
-        Knob.ZIndex = 4
-        Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
-
-        local function setToggle(val)
-            state = val
-            TweenService:Create(Switch, TweenInfo.new(0.15), {
-                BackgroundColor3 = state and UI_Settings.AccentColor or Color3.fromRGB(50, 50, 65)
-            }):Play()
-            TweenService:Create(Knob, TweenInfo.new(0.15), {
-                Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-            }):Play()
-            if cfg.Callback then task.spawn(cfg.Callback, state) end
+        local function selectTab()
+            for _, t in ipairs(Window.Tabs) do
+                t.Page.Visible = false
+                t.Btn.BackgroundColor3 = Theme.Element
+                t.Btn.BackgroundTransparency = 0.25
+                t.Btn.TextColor3 = Theme.SubText
+                t.Indicator.Visible = false
+            end
+            Page.Visible = true
+            TabBtn.BackgroundColor3 = Theme.PanelAlt
+            TabBtn.BackgroundTransparency = 0.05
+            TabBtn.TextColor3 = Theme.Accent
+            Indicator.Visible = true
         end
 
-        Card.MouseButton1Click:Connect(function() setToggle(not state) end)
-        return { Set = setToggle }
-    end
+        TabBtn.MouseButton1Click:Connect(selectTab)
+        table.insert(Window.Tabs, { Btn = TabBtn, Page = Page, Indicator = Indicator })
+        if #Window.Tabs == 1 then selectTab() end
 
-    function TabAPI:CreateSlider(cfg)
-        cfg = cfg or {}
-        local range = cfg.Range or { cfg.Min or 0, cfg.Max or 100 }
-        local minVal, maxVal = range[1], range[2]
-        local inc = cfg.Increment or 1
-        local suffix = cfg.Suffix and (" " .. cfg.Suffix) or ""
-        local curVal = cfg.CurrentValue or cfg.Default or minVal
+        local Tab = { Page = Page }
 
-        local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 48)
-        Card.BackgroundColor3 = UI_Settings.CardColor
-        Card.BackgroundTransparency = 0.15
-        Card.ZIndex = 3
-        Card.Parent = Page
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 6)
-
-        local Lbl = Instance.new("TextLabel", Card)
-        Lbl.Size = UDim2.new(1, -90, 0, 20)
-        Lbl.Position = UDim2.fromOffset(10, 4)
-        Lbl.BackgroundTransparency = 1
-        Lbl.Font = Enum.Font.GothamSemibold
-        Lbl.Text = tostring(cfg.Name or cfg.Text or "Slider")
-        Lbl.TextColor3 = UI_Settings.TextColor
-        Lbl.TextSize = 12
-        Lbl.TextXAlignment = Enum.TextXAlignment.Left
-        Lbl.ZIndex = 3
-
-        local ValLbl = Instance.new("TextLabel", Card)
-        ValLbl.Size = UDim2.fromOffset(80, 20)
-        ValLbl.Position = UDim2.new(1, -90, 0, 4)
-        ValLbl.BackgroundTransparency = 1
-        ValLbl.Font = Enum.Font.GothamBold
-        ValLbl.Text = tostring(curVal) .. suffix
-        ValLbl.TextColor3 = UI_Settings.AccentColor
-        ValLbl.TextSize = 12
-        ValLbl.TextXAlignment = Enum.TextXAlignment.Right
-        ValLbl.ZIndex = 3
-
-        local BarBg = Instance.new("TextButton", Card)
-        BarBg.Size = UDim2.new(1, -20, 0, 8)
-        BarBg.Position = UDim2.fromOffset(10, 30)
-        BarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-        BarBg.Text = ""
-        BarBg.AutoButtonColor = false
-        BarBg.ZIndex = 3
-        Instance.new("UICorner", BarBg).CornerRadius = UDim.new(1, 0)
-
-        local Fill = Instance.new("Frame", BarBg)
-        local initAlpha = math.clamp((curVal - minVal) / math.max(0.0001, maxVal - minVal), 0, 1)
-        Fill.Size = UDim2.new(initAlpha, 0, 1, 0)
-        Fill.BackgroundColor3 = UI_Settings.AccentColor
-        Fill.BorderSizePixel = 0
-        Fill.ZIndex = 4
-        Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
-
-        local sliding = false
-        local function updateFromInput(inputPos)
-            local relX = math.clamp((inputPos.X - BarBg.AbsolutePosition.X) / math.max(1, BarBg.AbsoluteSize.X), 0, 1)
-            local raw = minVal + (maxVal - minVal) * relX
-            local snapped = math.floor((raw / inc) + 0.5) * inc
-            snapped = tonumber(string.format("%.2f", math.clamp(snapped, minVal, maxVal)))
-            curVal = snapped
-            local alpha = (curVal - minVal) / math.max(0.0001, maxVal - minVal)
-            Fill.Size = UDim2.new(alpha, 0, 1, 0)
-            ValLbl.Text = tostring(curVal) .. suffix
-            if cfg.Callback then task.spawn(cfg.Callback, curVal) end
+        function Tab:AddSection(text)
+            local secName = type(text) == "table" and (text.Name or text.Title) or tostring(text or "Section")
+            create("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 24),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamBold,
+                Text = "◆  " .. secName,
+                TextColor3 = Theme.Accent,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Page,
+            })
         end
 
-        BarBg.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                sliding = true
-                updateFromInput(input.Position)
-            end
-        end)
-        trackConn(UserInputService.InputChanged:Connect(function(input)
-            if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                updateFromInput(input.Position)
-            end
-        end))
-        trackConn(UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                sliding = false
-            end
-        end))
-    end
+        function Tab:AddLabel(text)
+            local lblText = type(text) == "table" and ((text.Title and (text.Title .. ": " .. tostring(text.Content or ""))) or text.Text or text.Name) or tostring(text or "")
+            local Card = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 34),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.2,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+            })
+            local Lbl = create("TextLabel", {
+                Size = UDim2.new(1, -20, 1, 0),
+                Position = UDim2.fromOffset(10, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = lblText,
+                TextColor3 = Theme.SubText,
+                TextSize = 11,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Card,
+            })
+            return { Set = function(_, newTxt) Lbl.Text = tostring(newTxt) end }
+        end
 
-    function TabAPI:CreateDropdown(cfg)
-        cfg = cfg or {}
-        local options = cfg.Options or {"None"}
-        local current = cfg.CurrentOption or options[1] or "None"
-        if type(current) == "table" then current = current[1] end
-        local isOpen = false
+        function Tab:AddButton(c, fnArg)
+            local cfg = type(c) == "table" and c or { Name = tostring(c), Callback = fnArg }
+            local btnText = cfg.Name or cfg.Title or cfg.Text or "Button"
+            local callback = cfg.Callback or cfg.Func or fnArg
 
-        local Container = Instance.new("Frame")
-        Container.Size = UDim2.new(1, 0, 0, 36)
-        Container.BackgroundColor3 = UI_Settings.CardColor
-        Container.BackgroundTransparency = 0.15
-        Container.ClipsDescendants = true
-        Container.ZIndex = 3
-        Container.Parent = Page
-        Instance.new("UICorner", Container).CornerRadius = UDim.new(0, 6)
+            local Btn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                Font = Enum.Font.GothamBold,
+                Text = "  ▶  " .. tostring(btnText),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                AutoButtonColor = false,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
 
-        local TopBtn = Instance.new("TextButton", Container)
-        TopBtn.Size = UDim2.new(1, 0, 0, 36)
-        TopBtn.BackgroundTransparency = 1
-        TopBtn.Font = Enum.Font.GothamSemibold
-        TopBtn.Text = "  " .. tostring(cfg.Name or "Dropdown") .. ":  [" .. tostring(current) .. "]  ▼"
-        TopBtn.TextColor3 = UI_Settings.TextColor
-        TopBtn.TextSize = 12
-        TopBtn.TextXAlignment = Enum.TextXAlignment.Left
-        TopBtn.ZIndex = 3
-
-        local OptionList = Instance.new("Frame", Container)
-        OptionList.Size = UDim2.new(1, -12, 0, 0)
-        OptionList.Position = UDim2.fromOffset(6, 38)
-        OptionList.BackgroundTransparency = 1
-        OptionList.ZIndex = 3
-        local OptLayout = Instance.new("UIListLayout", OptionList)
-        OptLayout.Padding = UDim.new(0, 4)
-
-        local function rebuildOptions(newOpts)
-            options = newOpts or options
-            for _, child in ipairs(OptionList:GetChildren()) do
-                if child:IsA("TextButton") then child:Destroy() end
-            end
-            for _, opt in ipairs(options) do
-                local OBtn = Instance.new("TextButton", OptionList)
-                OBtn.Size = UDim2.new(1, 0, 0, 26)
-                OBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-                OBtn.Font = Enum.Font.Gotham
-                OBtn.Text = tostring(opt)
-                OBtn.TextColor3 = UI_Settings.TextColor
-                OBtn.TextSize = 11
-                OBtn.ZIndex = 4
-                Instance.new("UICorner", OBtn).CornerRadius = UDim.new(0, 4)
-
-                OBtn.MouseButton1Click:Connect(function()
-                    current = opt
-                    TopBtn.Text = "  " .. tostring(cfg.Name or "Dropdown") .. ":  [" .. tostring(current) .. "]  ▼"
-                    isOpen = false
-                    Container.Size = UDim2.new(1, 0, 0, 36)
-                    if cfg.Callback then task.spawn(cfg.Callback, current) end
+            Btn.MouseButton1Click:Connect(function()
+                TweenService:Create(Btn, TweenInfo.new(0.1), { BackgroundColor3 = Theme.AccentDim }):Play()
+                task.delay(0.12, function()
+                    TweenService:Create(Btn, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
                 end)
-            end
-            if isOpen then Container.Size = UDim2.new(1, 0, 0, 42 + (#options * 30)) end
+                if callback then task.spawn(callback) end
+            end)
+            return Btn
         end
 
-        TopBtn.MouseButton1Click:Connect(function()
-            isOpen = not isOpen
-            Container.Size = isOpen and UDim2.new(1, 0, 0, 42 + (#options * 30)) or UDim2.new(1, 0, 0, 36)
-        end)
-        rebuildOptions(options)
-        return {
-            Refresh = function(_, newList) rebuildOptions(newList) end,
-            Set = function(_, val)
-                current = val
-                TopBtn.Text = "  " .. tostring(cfg.Name or "Dropdown") .. ":  [" .. tostring(current) .. "]  ▼"
-                if cfg.Callback then task.spawn(cfg.Callback, current) end
+        function Tab:AddToggle(c, optArg)
+            local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+            local name = cfg.Name or cfg.Title or cfg.Text or (type(c) == "string" and c) or "Toggle"
+            local state = cfg.CurrentValue or cfg.Default or false
+            local callback = cfg.Callback
+
+            local Card = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
+
+            create("TextLabel", {
+                Size = UDim2.new(1, -70, 1, 0),
+                Position = UDim2.fromOffset(12, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = tostring(name),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Card,
+            })
+
+            local Switch = create("Frame", {
+                Size = UDim2.fromOffset(42, 20),
+                Position = UDim2.new(1, -52, 0.5, -10),
+                BackgroundColor3 = state and Theme.Accent or Theme.Off,
+                ZIndex = 3,
+                Parent = Card,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+            })
+
+            local Knob = create("Frame", {
+                Size = UDim2.fromOffset(14, 14),
+                Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7),
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                ZIndex = 4,
+                Parent = Switch,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+            })
+
+            local function setToggle(val)
+                state = val
+                TweenService:Create(Switch, TweenInfo.new(0.15), {
+                    BackgroundColor3 = state and Theme.Accent or Theme.Off
+                }):Play()
+                TweenService:Create(Knob, TweenInfo.new(0.15), {
+                    Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+                }):Play()
+                if callback then task.spawn(callback, state) end
             end
-        }
-    end
 
-    function TabAPI:CreateKeybind(cfg)
-        cfg = cfg or {}
-        local keyName = cfg.CurrentKeybind or "None"
-        local currentKey = Enum.KeyCode[keyName] or Enum.KeyCode.Unknown
-        local binding = false
+            Card.MouseButton1Click:Connect(function() setToggle(not state) end)
+            return { Set = setToggle, SetValue = setToggle }
+        end
 
-        local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 36)
-        Card.BackgroundColor3 = UI_Settings.CardColor
-        Card.BackgroundTransparency = 0.15
-        Card.ZIndex = 3
-        Card.Parent = Page
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 6)
+        function Tab:AddSlider(c, optArg)
+            local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+            local name = cfg.Name or cfg.Title or cfg.Text or (type(c) == "string" and c) or "Slider"
+            local range = cfg.Range or { cfg.Min or 0, cfg.Max or 100 }
+            local minVal, maxVal = range[1], range[2]
+            local inc = cfg.Increment or cfg.Step or (cfg.Rounding == 2 and 0.01) or (cfg.Rounding == 1 and 0.1) or 1
+            local suffix = cfg.Suffix and (" " .. cfg.Suffix) or ""
+            local curVal = cfg.CurrentValue or cfg.Default or minVal
+            local callback = cfg.Callback
 
-        local Lbl = Instance.new("TextLabel", Card)
-        Lbl.Size = UDim2.new(1, -100, 1, 0)
-        Lbl.Position = UDim2.fromOffset(10, 0)
-        Lbl.BackgroundTransparency = 1
-        Lbl.Font = Enum.Font.GothamSemibold
-        Lbl.Text = tostring(cfg.Name or "Keybind")
-        Lbl.TextColor3 = UI_Settings.TextColor
-        Lbl.TextSize = 12
-        Lbl.TextXAlignment = Enum.TextXAlignment.Left
-        Lbl.ZIndex = 3
+            local Card = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 50),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
 
-        local KeyBtn = Instance.new("TextButton", Card)
-        KeyBtn.Size = UDim2.fromOffset(75, 24)
-        KeyBtn.Position = UDim2.new(1, -85, 0.5, -12)
-        KeyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 62)
-        KeyBtn.Font = Enum.Font.GothamBold
-        KeyBtn.Text = "[" .. tostring(keyName) .. "]"
-        KeyBtn.TextColor3 = UI_Settings.AccentColor
-        KeyBtn.TextSize = 11
-        KeyBtn.ZIndex = 3
-        Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 4)
+            create("TextLabel", {
+                Size = UDim2.new(1, -95, 0, 20),
+                Position = UDim2.fromOffset(12, 5),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = tostring(name),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Card,
+            })
 
-        KeyBtn.MouseButton1Click:Connect(function()
-            binding = true
-            KeyBtn.Text = "[...]"
-        end)
+            local ValLbl = create("TextLabel", {
+                Size = UDim2.fromOffset(85, 20),
+                Position = UDim2.new(1, -95, 0, 5),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamBold,
+                Text = tostring(curVal) .. suffix,
+                TextColor3 = Theme.Accent,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Right,
+                ZIndex = 3,
+                Parent = Card,
+            })
 
-        trackConn(UserInputService.InputBegan:Connect(function(input, gpe)
-            if binding then
-                if input.UserInputType == Enum.UserInputType.Keyboard then
-                    currentKey = input.KeyCode
-                    keyName = input.KeyCode.Name
-                    KeyBtn.Text = "[" .. keyName .. "]"
-                    binding = false
+            local BarBg = create("TextButton", {
+                Size = UDim2.new(1, -24, 0, 8),
+                Position = UDim2.fromOffset(12, 32),
+                BackgroundColor3 = Theme.Off,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 3,
+                Parent = Card,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+            })
+
+            local initAlpha = math.clamp((curVal - minVal) / math.max(0.0001, maxVal - minVal), 0, 1)
+            local Fill = create("Frame", {
+                Size = UDim2.new(initAlpha, 0, 1, 0),
+                BackgroundColor3 = Theme.Accent,
+                ZIndex = 4,
+                Parent = BarBg,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+            })
+
+            local sliding = false
+            local function updateVal(pos)
+                local relX = math.clamp((pos.X - BarBg.AbsolutePosition.X) / math.max(1, BarBg.AbsoluteSize.X), 0, 1)
+                local raw = minVal + (maxVal - minVal) * relX
+                local snapped = math.floor((raw / inc) + 0.5) * inc
+                snapped = tonumber(string.format("%.2f", math.clamp(snapped, minVal, maxVal)))
+                curVal = snapped
+                local alpha = (curVal - minVal) / math.max(0.0001, maxVal - minVal)
+                Fill.Size = UDim2.new(alpha, 0, 1, 0)
+                ValLbl.Text = tostring(curVal) .. suffix
+                if callback then task.spawn(callback, curVal) end
+            end
+
+            BarBg.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    sliding = true
+                    updateVal(input.Position)
                 end
-                return
-            end
-            if not gpe and UserInputService:GetFocusedTextBox() == nil then
-                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
-                    if cfg.Callback then task.spawn(cfg.Callback) end
+            end)
+            track(UserInputService.InputChanged:Connect(function(input)
+                if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    updateVal(input.Position)
+                end
+            end))
+            track(UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    sliding = false
+                end
+            end))
+        end
+
+        function Tab:AddDropdown(c, optArg)
+            local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+            local name = cfg.Name or cfg.Title or cfg.Text or (type(c) == "string" and c) or "Dropdown"
+            local options = cfg.Options or cfg.Values or { "None" }
+            local current = cfg.CurrentOption or cfg.Default or options[1] or "None"
+            if type(current) == "table" then current = current[1] end
+            local callback = cfg.Callback
+            local isOpen = false
+
+            local Container = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                ClipsDescendants = true,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
+
+            local TopBtn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = "  " .. tostring(name) .. ":  [" .. tostring(current) .. "]  ▼",
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Container,
+            })
+
+            local OptionList = create("Frame", {
+                Size = UDim2.new(1, -16, 0, 0),
+                Position = UDim2.fromOffset(8, 40),
+                BackgroundTransparency = 1,
+                ZIndex = 3,
+                Parent = Container,
+            }, {
+                create("UIListLayout", { Padding = UDim.new(0, 4) }),
+            })
+
+            local function rebuild(newOpts)
+                options = newOpts or options
+                for _, ch in ipairs(OptionList:GetChildren()) do
+                    if ch:IsA("TextButton") then ch:Destroy() end
+                end
+                for _, opt in ipairs(options) do
+                    local OBtn = create("TextButton", {
+                        Size = UDim2.new(1, 0, 0, 26),
+                        BackgroundColor3 = Theme.PanelAlt,
+                        Font = Enum.Font.GothamSemibold,
+                        Text = tostring(opt),
+                        TextColor3 = Theme.Text,
+                        TextSize = 11,
+                        ZIndex = 4,
+                        Parent = OptionList,
+                    }, {
+                        create("UICorner", { CornerRadius = UDim.new(0, 5) }),
+                    })
+                    OBtn.MouseButton1Click:Connect(function()
+                        current = opt
+                        TopBtn.Text = "  " .. tostring(name) .. ":  [" .. tostring(current) .. "]  ▼"
+                        isOpen = false
+                        Container.Size = UDim2.new(1, 0, 0, 38)
+                        if callback then task.spawn(callback, current) end
+                    end)
+                end
+                if isOpen then
+                    Container.Size = UDim2.new(1, 0, 0, 44 + (#options * 30))
                 end
             end
-        end))
+
+            TopBtn.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                Container.Size = isOpen and UDim2.new(1, 0, 0, 44 + (#options * 30)) or UDim2.new(1, 0, 0, 38)
+            end)
+
+            rebuild(options)
+
+            return {
+                Refresh = function(_, newList) rebuild(newList) end,
+                Set = function(_, val)
+                    current = val
+                    TopBtn.Text = "  " .. tostring(name) .. ":  [" .. tostring(current) .. "]  ▼"
+                    if callback then task.spawn(callback, current) end
+                end
+            }
+        end
+
+        function Tab:AddKeybind(c)
+            local cfg = c or {}
+            local name = cfg.Name or cfg.Title or cfg.Text or "Keybind"
+            local keyName = cfg.CurrentKeybind or (typeof(cfg.Default) == "EnumItem" and cfg.Default.Name) or cfg.Default or "E"
+            local currentKey = typeof(cfg.Default) == "EnumItem" and cfg.Default or (Enum.KeyCode[tostring(keyName)] or Enum.KeyCode.E)
+            local binding = false
+
+            local Card = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
+
+            create("TextLabel", {
+                Size = UDim2.new(1, -100, 1, 0),
+                Position = UDim2.fromOffset(12, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = tostring(name),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Card,
+            })
+
+            local KeyBtn = create("TextButton", {
+                Size = UDim2.fromOffset(78, 24),
+                Position = UDim2.new(1, -88, 0.5, -12),
+                BackgroundColor3 = Theme.PanelAlt,
+                Font = Enum.Font.GothamBold,
+                Text = "[" .. tostring(currentKey.Name) .. "]",
+                TextColor3 = Theme.Accent,
+                TextSize = 11,
+                ZIndex = 3,
+                Parent = Card,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 5) }),
+            })
+
+            KeyBtn.MouseButton1Click:Connect(function()
+                binding = true
+                KeyBtn.Text = "[...]"
+            end)
+
+            track(UserInputService.InputBegan:Connect(function(input, gpe)
+                if binding then
+                    if input.UserInputType == Enum.UserInputType.Keyboard then
+                        currentKey = input.KeyCode
+                        KeyBtn.Text = "[" .. currentKey.Name .. "]"
+                        binding = false
+                        if cfg.OnChange then pcall(cfg.OnChange, currentKey) end
+                    end
+                    return
+                end
+                if not gpe and UserInputService:GetFocusedTextBox() == nil then
+                    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
+                        if cfg.Callback then task.spawn(cfg.Callback, currentKey) end
+                    end
+                end
+            end))
+        end
+
+        function Tab:AddInput(c)
+            local cfg = c or {}
+            local name = cfg.Name or cfg.Title or cfg.Text or "Input"
+            local Card = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 40),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
+
+            create("TextLabel", {
+                Size = UDim2.new(0.46, -12, 1, 0),
+                Position = UDim2.fromOffset(12, 0),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamSemibold,
+                Text = tostring(name),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 3,
+                Parent = Card,
+            })
+
+            local Box = create("TextBox", {
+                Size = UDim2.new(0.52, -12, 0, 26),
+                Position = UDim2.new(0.48, 0, 0.5, -13),
+                BackgroundColor3 = Theme.PanelAlt,
+                Font = Enum.Font.Gotham,
+                PlaceholderText = tostring(cfg.PlaceholderText or "Nhập..."),
+                PlaceholderColor3 = Theme.SubText,
+                Text = "",
+                TextColor3 = Theme.Text,
+                TextSize = 11,
+                ClearTextOnFocus = false,
+                ZIndex = 3,
+                Parent = Card,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 5) }),
+            })
+
+            Box.FocusLost:Connect(function()
+                local txt = Box.Text
+                if cfg.RemoveTextAfterFocusLost then Box.Text = "" end
+                if cfg.Callback then task.spawn(cfg.Callback, txt) end
+            end)
+        end
+
+        function Tab:AddColorPicker(c)
+            local cfg = c or {}
+            local name = cfg.Name or cfg.Title or "Color Picker"
+            local colors = {
+                Color3.fromRGB(255, 200, 60),
+                Color3.fromRGB(0, 229, 255),
+                Color3.fromRGB(170, 80, 255),
+                Color3.fromRGB(70, 220, 130),
+                Color3.fromRGB(255, 70, 90),
+                Color3.fromRGB(255, 255, 255),
+            }
+            local idx = 1
+
+            local Btn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = Theme.Element,
+                BackgroundTransparency = 0.12,
+                Font = Enum.Font.GothamSemibold,
+                Text = "  🎨  " .. tostring(name),
+                TextColor3 = Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                AutoButtonColor = false,
+                ZIndex = 3,
+                Parent = Page,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+                create("UIStroke", { Thickness = 1, Color = Theme.Stroke }),
+            })
+
+            local Preview = create("Frame", {
+                Size = UDim2.fromOffset(22, 22),
+                Position = UDim2.new(1, -34, 0.5, -11),
+                BackgroundColor3 = cfg.Color or colors[1],
+                ZIndex = 4,
+                Parent = Btn,
+            }, {
+                create("UICorner", { CornerRadius = UDim.new(1, 0) }),
+            })
+
+            Btn.MouseButton1Click:Connect(function()
+                idx = (idx % #colors) + 1
+                Preview.BackgroundColor3 = colors[idx]
+                if cfg.Callback then task.spawn(cfg.Callback, colors[idx]) end
+            end)
+        end
+
+        -- Cầu nối tương thích 100% với Rayfield / Fluent / Linoria trong 12 Tab
+        Tab.CreateSection     = Tab.AddSection
+        Tab.CreateParagraph   = Tab.AddLabel
+        Tab.AddParagraph      = Tab.AddLabel
+        Tab.CreateButton      = Tab.AddButton
+        Tab.CreateToggle      = Tab.AddToggle
+        Tab.CreateSlider      = Tab.AddSlider
+        Tab.CreateDropdown    = Tab.AddDropdown
+        Tab.CreateKeybind     = Tab.AddKeybind
+        Tab.CreateInput       = Tab.AddInput
+        Tab.CreateColorPicker = Tab.AddColorPicker
+        Tab.AddLeftGroupbox   = function(self, grpName) self:AddSection(grpName) return self end
+        Tab.AddRightGroupbox  = function(self, grpName) self:AddSection(grpName) return self end
+
+        return Tab
     end
 
-    function TabAPI:CreateInput(cfg)
-        cfg = cfg or {}
-        local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 40)
-        Card.BackgroundColor3 = UI_Settings.CardColor
-        Card.BackgroundTransparency = 0.15
-        Card.ZIndex = 3
-        Card.Parent = Page
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 6)
-
-        local Lbl = Instance.new("TextLabel", Card)
-        Lbl.Size = UDim2.new(0.45, -10, 1, 0)
-        Lbl.Position = UDim2.fromOffset(10, 0)
-        Lbl.BackgroundTransparency = 1
-        Lbl.Font = Enum.Font.GothamSemibold
-        Lbl.Text = tostring(cfg.Name or "Input")
-        Lbl.TextColor3 = UI_Settings.TextColor
-        Lbl.TextSize = 12
-        Lbl.TextXAlignment = Enum.TextXAlignment.Left
-        Lbl.ZIndex = 3
-
-        local Box = Instance.new("TextBox", Card)
-        Box.Size = UDim2.new(0.52, -10, 0, 26)
-        Box.Position = UDim2.new(0.48, 0, 0.5, -13)
-        Box.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-        Box.Font = Enum.Font.Gotham
-        Box.PlaceholderText = tostring(cfg.PlaceholderText or "Nhập...")
-        Box.PlaceholderColor3 = Color3.fromRGB(130, 130, 150)
-        Box.Text = ""
-        Box.TextColor3 = UI_Settings.TextColor
-        Box.TextSize = 11
-        Box.ClearTextOnFocus = false
-        Box.ZIndex = 3
-        Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 4)
-
-        Box.FocusLost:Connect(function()
-            local txt = Box.Text
-            if cfg.RemoveTextAfterFocusLost then Box.Text = "" end
-            if cfg.Callback then task.spawn(cfg.Callback, txt) end
-        end)
-    end
-
-    function TabAPI:CreateColorPicker(cfg)
-        cfg = cfg or {}
-        local presetColors = {
-            Color3.fromRGB(255, 200, 60), Color3.fromRGB(160, 80, 255),
-            Color3.fromRGB(0, 230, 255), Color3.fromRGB(50, 255, 130),
-            Color3.fromRGB(255, 65, 85), Color3.fromRGB(255, 255, 255)
-        }
-        local idx = 1
-
-        local Btn = Instance.new("TextButton")
-        Btn.Size = UDim2.new(1, 0, 0, 36)
-        Btn.BackgroundColor3 = UI_Settings.CardColor
-        Btn.BackgroundTransparency = 0.15
-        Btn.Font = Enum.Font.GothamSemibold
-        Btn.Text = "  🎨  " .. tostring(cfg.Name or "Color Picker") .. " (Bấm đổi màu)"
-        Btn.TextColor3 = UI_Settings.TextColor
-        Btn.TextSize = 12
-        Btn.TextXAlignment = Enum.TextXAlignment.Left
-        Btn.AutoButtonColor = false
-        Btn.ZIndex = 3
-        Btn.Parent = Page
-        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-
-        local Preview = Instance.new("Frame", Btn)
-        Preview.Size = UDim2.fromOffset(22, 22)
-        Preview.Position = UDim2.new(1, -32, 0.5, -11)
-        Preview.BackgroundColor3 = cfg.Color or presetColors[1]
-        Preview.ZIndex = 4
-        Instance.new("UICorner", Preview).CornerRadius = UDim.new(1, 0)
-
-        Btn.MouseButton1Click:Connect(function()
-            idx = (idx % #presetColors) + 1
-            local chosen = presetColors[idx]
-            Preview.BackgroundColor3 = chosen
-            if cfg.Callback then task.spawn(cfg.Callback, chosen) end
-        end)
-    end
-
-    TabAPI.AddButton = TabAPI.CreateButton
-    TabAPI.AddToggle = function(self, flag, opts)
-        opts = opts or {}
-        opts.Name = opts.Title or opts.Text or flag
-        return self:CreateToggle(opts)
-    end
-    TabAPI.AddSlider = function(self, flag, opts)
-        opts = opts or {}
-        opts.Name = opts.Title or opts.Text or flag
-        return self:CreateSlider(opts)
-    end
-
-    return TabAPI
+    return Window
 end
 
+-- ============================================================================
+-- KHỞI TẠO CỬA SỔ CPZ MENU - JJS EDITION BY ZELYNX
+-- ============================================================================
+local Window = Library:CreateWindow({
+    Title = "CPZ Menu",
+    SubTitle = "JJS Edition by Zelynx",
+    MenuKey = Enum.KeyCode.F,
+})
+
 local Tabs = {
-    Gojo      = CreateCustomTab("🌀 Gojo"),
-    Items     = CreateCustomTab("🎒 Items"),
-    AutoBlock = CreateCustomTab("🛡️ Auto Block"),
-    AllChar   = CreateCustomTab("⚡ All Chars"),
-    M1        = CreateCustomTab("👊 M1 Combat"),
-    Yuji      = CreateCustomTab("🔥 Yuji"),
-    Haruta    = CreateCustomTab("🗡️ Haruta"),
-    Event     = CreateCustomTab("🎃 Event"),
-    Ryu       = CreateCustomTab("💥 Ryu"),
-    Yuta      = CreateCustomTab("💍 Yuta"),
-    OP        = CreateCustomTab("👁️ OP / UI"),
-    Premium   = CreateCustomTab("💎 Premium"),
-    Settings  = CreateCustomTab("⚙️ Cài Đặt Nền")
+    Gojo      = Window:AddTab({ Title = "Gojo",       Icon = "🌀" }),
+    Items     = Window:AddTab({ Title = "Items",      Icon = "🎒" }),
+    AutoBlock = Window:AddTab({ Title = "Auto Block", Icon = "🛡️" }),
+    AllChar   = Window:AddTab({ Title = "All Chars",  Icon = "⚡" }),
+    M1        = Window:AddTab({ Title = "M1 Combat",  Icon = "👊" }),
+    Yuji      = Window:AddTab({ Title = "Yuji",       Icon = "🔥" }),
+    Haruta    = Window:AddTab({ Title = "Haruta",     Icon = "🗡️" }),
+    Event     = Window:AddTab({ Title = "Event",      Icon = "🎃" }),
+    Ryu       = Window:AddTab({ Title = "Ryu",        Icon = "💥" }),
+    Yuta      = Window:AddTab({ Title = "Yuta",       Icon = "💍" }),
+    OP        = Window:AddTab({ Title = "OP / UI",    Icon = "👁️" }),
+    Premium   = Window:AddTab({ Title = "Premium",    Icon = "💎" }),
+    Settings  = Window:AddTab({ Title = "Settings",   Icon = "⚙️" }),
 }
 
 -- ============================================================================
--- NHÚNG CÁC TAB MODULE (LẤY TỪ MÃ NGUỒN CỦA BẠN VÀ GIST)
+-- NẠP TRỰC TIẾP 11 MODULE CÔNG KHAI VÀO CÁC TAB CỦA CPZ MENU
 -- ============================================================================
+local PublicModules = {
+    Gojo      = "https://gist.githubusercontent.com/mosasaurrayan-cell/0eff78bbd7a73251ad207ee3ee0e56fa/raw/GojoTab",
+    Items     = "https://gist.githubusercontent.com/nayarryanks-debug/470c951aa69a5b2099b4304ed770f4f7/raw/ItemsTab",
+    AutoBlock = "https://gist.githubusercontent.com/mosasaurrayan-cell/80f16d02affcc6e8c229e621847fb0ff/raw/BlockTab",
+    AllChar   = "https://gist.githubusercontent.com/mosasaurrayan-cell/09f9db6e31cf2386475f7695fc1bf064/raw/AllChars",
+    M1        = "https://gist.githubusercontent.com/mosasaurrayan-cell/8e178b0f426a02d368e073849b110c8e/raw/m1tab",
+    Yuji      = "https://gist.githubusercontent.com/mosasaurrayan-cell/b697f8faa6bf44283a0d4e57cf5f6a5d/raw/YujiTab",
+    Haruta    = "https://gist.githubusercontent.com/mosasaurrayan-cell/c4d5d6490b928eb116d0340d74cba035/raw/HarutaTab",
+    Event     = "https://gist.githubusercontent.com/mosasaurrayan-cell/69deeb8cd3065eb7196929b43ad92592/raw/Eventtab",
+    Ryu       = "https://gist.githubusercontent.com/mosasaurrayan-cell/4c0c8ef2a8f8e69a9cc14e1ec46c0283/raw/Ryu",
+    Yuta      = "https://gist.githubusercontent.com/mosasaurrayan-cell/b017a8730c6dd0c75d7ce9a092755422/raw/Yuta",
+    OP        = "https://gist.githubusercontent.com/mosasaurrayan-cell/a556440a547500c01e4f3b1ce619bbff/raw/OpTab",
+}
 
-task.spawn(function()
-    local mod = (function()
--- Failed to load Gojo: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Gojo) elseif type(mod) == 'table' then pcall(mod, Tabs.Gojo) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Items: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Items) elseif type(mod) == 'table' then pcall(mod, Tabs.Items) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load AutoBlock: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.AutoBlock) elseif type(mod) == 'table' then pcall(mod, Tabs.AutoBlock) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load AllChar: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.AllChar) elseif type(mod) == 'table' then pcall(mod, Tabs.AllChar) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load M1: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.M1) elseif type(mod) == 'table' then pcall(mod, Tabs.M1) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Yuji: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Yuji) elseif type(mod) == 'table' then pcall(mod, Tabs.Yuji) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Haruta: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Haruta) elseif type(mod) == 'table' then pcall(mod, Tabs.Haruta) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Event: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Event) elseif type(mod) == 'table' then pcall(mod, Tabs.Event) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Ryu: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Ryu) elseif type(mod) == 'table' then pcall(mod, Tabs.Ryu) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load Yuta: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.Yuta) elseif type(mod) == 'table' then pcall(mod, Tabs.Yuta) end
-end)
-
-task.spawn(function()
-    local mod = (function()
--- Failed to load OP: <urlopen error [Errno -3] Temporary failure in name resolution>
-    end)()
-    if type(mod) == 'function' then pcall(mod, Tabs.OP) elseif type(mod) == 'table' then pcall(mod, Tabs.OP) end
-end)
+for tabKey, url in pairs(PublicModules) do
+    task.spawn(function()
+        local raw = httpGet(url)
+        if raw and #raw > 10 then
+            local fn, err = loadstring(raw)
+            if fn then
+                local ok, mod = pcall(fn)
+                if ok and mod then
+                    pcall(mod, Tabs[tabKey])
+                end
+            else
+                warn("[CPZ Menu] Lỗi biên dịch tab " .. tabKey .. ": " .. tostring(err))
+            end
+        else
+            Tabs[tabKey]:AddLabel("⚠️ Không thể tải dữ liệu tab " .. tabKey .. " (Kiểm tra mạng/Executor)")
+        end
+    end)
+end
 
 -- ============================================================================
--- TAB PREMIUM 💎 (KHÓA BẰNG KEY 0946 + TỰ ĐỘNG THÊM TÊN VÀO WHITELIST)
+-- TAB PREMIUM 💎 (KHÓA BẰNG KEY 0946 + TỰ ĐỘNG WHITELIST TÀI KHOẢN CỦA BẠN)
 -- ============================================================================
 local PremiumUnlocked = false
+local PremiumURL = "https://gist.githubusercontent.com/nayarryanks-debug/d10421dfd315dd40d441e26b06a8c7d8/raw/PremiumTab"
 
-Tabs.Premium:CreateSection("Bảo Mật VIP - Zelynx Edition")
-Tabs.Premium:CreateInput({
+Tabs.Premium:AddSection("Premium Access (Key: 0946)")
+
+Tabs.Premium:AddInput({
     Name = "🔐 Nhập Key Premium",
     PlaceholderText = "Nhập mật khẩu (0946)...",
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
         if tostring(text):gsub("%s+", "") == "0946" then
             if PremiumUnlocked then
-                Notify("Premium VIP", "Tab Premium đã được mở khóa rồi!", 2)
+                Notify("CPZ Menu", "Tab Premium đã được mở khóa rồi!", 2)
                 return
             end
             PremiumUnlocked = true
-            Notify("Mở Khóa Thành Công!", "Chào mừng Zelynx! Đang nạp tính năng Premium...", 4)
+            Notify("CPZ Menu", "Mở khóa Premium thành công! Đang tải tính năng...", 3)
 
             task.spawn(function()
-                local mod = (function()
--- Failed to load Premium: <urlopen error [Errno -3] Temporary failure in name resolution>
-                end)()
-                if type(mod) == 'function' then pcall(mod, Tabs.Premium) elseif type(mod) == 'table' then pcall(mod, Tabs.Premium) end
+                local raw = httpGet(PremiumURL)
+                if raw and #raw > 10 then
+                    -- Tự động thêm tên tài khoản hiện tại của bạn vào WhitelistedUsers
+                    local patched = raw:gsub(
+                        'local WhitelistedUsers = { "larpercharmer", "AMLJGI" }',
+                        string.format('local WhitelistedUsers = { "larpercharmer", "AMLJGI", "%s" }', LocalPlayer.Name)
+                    )
+                    local fn = loadstring(patched)
+                    if fn then
+                        local ok, mod = pcall(fn)
+                        if ok and mod then
+                            pcall(mod, Tabs.Premium)
+                        end
+                    end
+                end
             end)
         else
-            Notify("Sai Key!", "Mật khẩu Premium không đúng!", 3)
+            Notify("Sai Mật Khẩu!", "Key Premium không chính xác!", 3)
         end
     end
 })
 
 -- ============================================================================
--- TAB CÀI ĐẶT NỀN & GIAO DIỆN (GIỮ NGUYÊN TÙY CHỈNH NỀN CPZ)
+-- TAB SETTINGS ⚙️ (GIỮ NGUYÊN CÀI ĐẶT NỀN GỐC CỦA CPZ MENU)
 -- ============================================================================
-Tabs.Settings:CreateSection("Tùy Chỉnh Hình Nền (Background)")
+local tSettings = Tabs.Settings
 
-local BgPresets = {
-    ["Gojo Purple (Mặc định)"] = "rbxassetid://15906773556",
-    ["Sukuna Shrine Dark"]     = "rbxassetid://14846885125",
-    ["Anime Cyber Night"]      = "rbxassetid://12974500525",
-    ["Galaxy Nebula"]          = "rbxassetid://15132613786",
-    ["Tắt Hình Nền"]           = ""
+local BG_DIR = "UniverseHub_BG"
+local fsOk = (type(isfolder) == "function" and type(makefolder) == "function"
+    and type(writefile) == "function" and type(isfile) == "function"
+    and (type(getcustomasset) == "function" or type(getsynasset) == "function"))
+local getAsset = getcustomasset or getsynasset
+
+if fsOk then
+    pcall(function()
+        if not isfolder(BG_DIR) then makefolder(BG_DIR) end
+    end)
+end
+
+local FURINA_URL = "https://raw.githubusercontent.com/talaben0307-jpg/autozphong/main/a59ac1fb-ba4f-4254-b6be-b14ea213ab70.jpg"
+
+local BG_PRESETS = {
+    { Name = "Furina Smug",     File = "bg_furina.jpg",  Url = FURINA_URL },
+    { Name = "Phong cảnh đêm",  File = "bg_night.jpg",   Url = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800" },
+    { Name = "Cyberpunk neon",  File = "bg_neon.jpg",    Url = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800" },
+    { Name = "Ảnh Thắng",       File = "bg_custom1.jpg", Url = "https://raw.githubusercontent.com/talaben0307-jpg/shot-murder/main/images%20(17).jpg" },
+    { Name = "Meme Hu Tao",     File = "bg_custom2.jpg", Url = "https://raw.githubusercontent.com/talaben0307-jpg/shot-murder/main/images%20(16).jpg" },
 }
 
-Tabs.Settings:CreateDropdown({
-    Name = "Chọn Hình Nền Có Sẵn",
-    Options = { "Gojo Purple (Mặc định)", "Sukuna Shrine Dark", "Anime Cyber Night", "Galaxy Nebula", "Tắt Hình Nền" },
-    CurrentOption = "Gojo Purple (Mặc định)",
-    Callback = function(selected)
-        local asset = BgPresets[selected]
-        if asset then BgImageLabel.Image = asset end
-    end
-})
+local function presetPath(p)
+    return BG_DIR .. "/" .. p.File
+end
 
-Tabs.Settings:CreateInput({
-    Name = "Nhập ID Ảnh Nền Tùy Ý",
-    PlaceholderText = "VD: 15906773556 hoặc rbxassetid://...",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local cleanId = tostring(text):match("%d+")
-        if cleanId then
-            BgImageLabel.Image = "rbxassetid://" .. cleanId
-            Notify("Cập Nhật Nền", "Đã đổi hình nền sang ID: " .. cleanId, 3)
+local function presetAsset(p)
+    if not fsOk then return "" end
+    local ok, asset = pcall(function()
+        if isfile(presetPath(p)) then return getAsset(presetPath(p)) end
+        return ""
+    end)
+    return (ok and asset) or ""
+end
+
+local function downloadPreset(p, onDone)
+    if not fsOk then return end
+    task.spawn(function()
+        if not isfile(presetPath(p)) then
+            local data = httpGet(p.Url)
+            if data and #data > 0 then
+                pcall(writefile, presetPath(p), data)
+            end
+        end
+        if onDone then onDone() end
+    end)
+end
+
+local function applyPreset(p)
+    downloadPreset(p, function()
+        local asset = presetAsset(p)
+        if asset ~= "" then
+            Window.BgImage.Image = asset
+            if fsOk then
+                pcall(writefile, BG_DIR .. "/selected.txt", p.Name)
+            end
+        end
+    end)
+end
+
+-- Tự động tải ảnh nền Furina Smug mặc định của CPZ Menu
+task.spawn(function()
+    local savedName = "Furina Smug"
+    if fsOk and isfile(BG_DIR .. "/selected.txt") then
+        local ok, r = pcall(readfile, BG_DIR .. "/selected.txt")
+        if ok and r and #r > 0 then savedName = r end
+    end
+    for _, p in ipairs(BG_PRESETS) do
+        if p.Name == savedName then
+            applyPreset(p)
+            break
         end
     end
+end)
+
+tSettings:AddSection("Ảnh nền (CPZ Original)")
+
+local presetNames = {}
+for _, p in ipairs(BG_PRESETS) do
+    table.insert(presetNames, p.Name)
+end
+table.insert(presetNames, "Tắt ảnh nền")
+
+tSettings:AddDropdown({
+    Name = "Chọn Ảnh Nền",
+    Options = presetNames,
+    CurrentOption = "Furina Smug",
+    Callback = function(selected)
+        if selected == "Tắt ảnh nền" then
+            Window.BgImage.Image = ""
+            return
+        end
+        for _, p in ipairs(BG_PRESETS) do
+            if p.Name == selected then
+                applyPreset(p)
+                break
+            end
+        end
+    end,
 })
 
-Tabs.Settings:CreateSlider({
-    Name = "Độ Mờ Hình Nền (Bg Transparency)",
-    Range = {0, 1},
+tSettings:AddInput({
+    Name = "ID / URL Ảnh Nền Tùy Chỉnh",
+    PlaceholderText = "Nhập rbxassetid:// hoặc số ID...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(txt)
+        local id = tostring(txt):match("%d+")
+        if id then
+            Window.BgImage.Image = "rbxassetid://" .. id
+        end
+    end,
+})
+
+tSettings:AddSlider({
+    Name = "Độ Mờ Ảnh Nền (Bg Transparency)",
+    Range = { 0, 1 },
     Increment = 0.05,
-    CurrentValue = UI_Settings.BgTransparency,
-    Callback = function(val)
-        UI_Settings.BgTransparency = val
-        BgImageLabel.ImageTransparency = val
-    end
+    CurrentValue = 0.45,
+    Callback = function(v)
+        Window.BgImage.ImageTransparency = v
+    end,
 })
 
-Tabs.Settings:CreateSection("Tùy Chỉnh Khung Menu")
-
-Tabs.Settings:CreateSlider({
-    Name = "Độ Trong Suốt Khung Menu",
-    Range = {0, 0.8},
+tSettings:AddSlider({
+    Name = "Độ Tối Lớp Phủ Nền (Shade)",
+    Range = { 0, 1 },
     Increment = 0.05,
-    CurrentValue = UI_Settings.WindowTransparency,
-    Callback = function(val)
-        UI_Settings.WindowTransparency = val
-        MainFrame.BackgroundTransparency = val
-    end
+    CurrentValue = 0.35,
+    Callback = function(v)
+        Window.BgShade.BackgroundTransparency = v
+    end,
 })
 
-Tabs.Settings:CreateToggle({
-    Name = "Viền Cầu Vồng (Rainbow Border)",
-    CurrentValue = UI_Settings.RainbowStroke,
-    Callback = function(val)
-        UI_Settings.RainbowStroke = val
-    end
+tSettings:AddSection("Menu")
+
+tSettings:AddKeybind({
+    Name = "Phím Đóng / Mở Menu",
+    Default = Enum.KeyCode.F,
+    OnChange = function(newKey)
+        Window:SetMenuKey(newKey)
+    end,
 })
 
-Tabs.Settings:CreateColorPicker({
-    Name = "Đổi Màu Chủ Đạo (Accent Color)",
-    Color = UI_Settings.AccentColor,
-    Callback = function(col)
-        UI_Settings.AccentColor = col
-        FloatBtn.TextColor3 = col
-        MainStroke.Color = col
-        FloatStroke.Color = col
-    end
-})
-
-Tabs.Settings:CreateKeybind({
-    Name = "Phím Ẩn/Hiện Menu (PC)",
-    CurrentKeybind = "RightShift",
+tSettings:AddButton({
+    Name = "Đóng Hoàn Toàn Script (Unload)",
     Callback = function()
-        MainFrame.Visible = not MainFrame.Visible
-    end
+        if env.UniverseCleanup then env.UniverseCleanup() end
+    end,
 })
 
-Notify("JJS Edition by Zelynx", "Đã tải thành công giao diện CPZ Custom UI FULL SOURCE!", 4)
+Notify("CPZ Menu", "JJS Edition by Zelynx đã tải hoàn tất!", 4)
