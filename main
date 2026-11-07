@@ -1,321 +1,1166 @@
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local cloneref = cloneref or function(o) return o end
+local checkcaller = checkcaller or function() return false end
+local getnamecallmethod = getnamecallmethod or get_namecall_method or function() return "" end
+local newcclosure = newcclosure or function(f) return f end
+
+local Players = cloneref(game:GetService("Players"))
+local Workspace = cloneref(game:GetService("Workspace"))
+local CoreGui = cloneref(game:GetService("CoreGui"))
+local RunService = cloneref(game:GetService("RunService"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local TweenService = cloneref(game:GetService("TweenService"))
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+local StarterGui = cloneref(game:GetService("StarterGui"))
+local StatsService = cloneref(game:GetService("Stats"))
+local ProximityPromptService = cloneref(game:GetService("ProximityPromptService"))
+local VirtualInputManager = cloneref(game:GetService("VirtualInputManager"))
+local Debris = cloneref(game:GetService("Debris"))
+
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if Workspace.CurrentCamera then Camera = Workspace.CurrentCamera end
+end)
 
-local function getGuiParent()
-    local ok, h = pcall(gethui)
-    if ok and h then return h end
-    return CoreGui
+local env = (getgenv and getgenv()) or _G
+if env.ZelynxCPZ_Cleanup then
+    pcall(env.ZelynxCPZ_Cleanup)
 end
 
-local guiParent = getGuiParent()
-if guiParent:FindFirstChild("ZelynxCPZ") then
-    guiParent.ZelynxCPZ:Destroy()
+local function getSafeGuiParent()
+    if gethui then
+        local ok, res = pcall(gethui)
+        if ok and res then return res end
+    end
+    local ok, core = pcall(function() return CoreGui end)
+    if ok and core then return core end
+    return LocalPlayer:WaitForChild("PlayerGui", 5)
+end
+
+local guiParent = getSafeGuiParent()
+local connections = {}
+local spinners = {}
+
+local function track(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local function Notify(title, text, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "CPZ Menu | Zelynx",
+            Text = text or "",
+            Duration = dur or 3
+        })
+    end)
+end
+
+local requestFn = (syn and syn.request) or (http and http.request) or http_request or request
+local function httpGet(url)
+    if requestFn then
+        local ok, res = pcall(requestFn, { Url = url, Method = "GET" })
+        if ok and res and res.StatusCode == 200 and res.Body then return res.Body end
+    end
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    return ok and body or nil
 end
 
 local Theme = {
-    Bg = Color3.fromRGB(15, 15, 20),
-    Panel = Color3.fromRGB(25, 25, 30),
-    Accent = Color3.fromRGB(200, 50, 255),
-    Text = Color3.fromRGB(240, 240, 240),
-    Off = Color3.fromRGB(50, 50, 60)
+    Background = Color3.fromRGB(12, 12, 18),
+    Panel = Color3.fromRGB(20, 20, 30),
+    PanelAlt = Color3.fromRGB(28, 24, 44),
+    Element = Color3.fromRGB(26, 26, 38),
+    Off = Color3.fromRGB(52, 52, 72),
+    Stroke = Color3.fromRGB(48, 48, 70),
+    Accent = Color3.fromRGB(0, 229, 255),
+    Accent2 = Color3.fromRGB(185, 75, 255),
+    Text = Color3.fromRGB(242, 242, 250),
+    SubText = Color3.fromRGB(160, 160, 185),
+    Danger = Color3.fromRGB(240, 65, 85),
 }
 
-local SG = Instance.new("ScreenGui")
-SG.Name = "ZelynxCPZ"
-SG.ResetOnSpawn = false
-SG.Parent = guiParent
+local ACCENT_GRADIENT = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Theme.Accent),
+    ColorSequenceKeypoint.new(0.5, Theme.Accent2),
+    ColorSequenceKeypoint.new(1, Theme.Accent),
+})
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.fromOffset(600, 380)
-MainFrame.Position = UDim2.fromScale(0.5, 0.5)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CPZ_JJS_Zelynx"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999
+ScreenGui.Parent = guiParent
+
+local function makeDraggable(handle, target, onTap)
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+    local moved = false
+    track(handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            moved = false
+            dragStart = input.Position
+            startPos = target.Position
+        end
+    end))
+    track(handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end))
+    track(UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            if delta.Magnitude > 6 then
+                moved = true
+                target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end
+    end))
+    track(UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                if not moved and onTap then onTap() end
+            end
+        end
+    end))
+end
+
+local TopPill = Instance.new("Frame", ScreenGui)
+TopPill.Size = UDim2.fromOffset(370, 30)
+TopPill.Position = UDim2.new(0.5, 0, 0, 10)
+TopPill.AnchorPoint = Vector2.new(0.5, 0)
+TopPill.BackgroundColor3 = Theme.Panel
+TopPill.BackgroundTransparency = 0.1
+TopPill.BorderSizePixel = 0
+Instance.new("UICorner", TopPill).CornerRadius = UDim.new(1, 0)
+local pillStroke = Instance.new("UIStroke", TopPill)
+pillStroke.Thickness = 1.6
+pillStroke.Color = Color3.new(1, 1, 1)
+local pillGrad = Instance.new("UIGradient", pillStroke)
+pillGrad.Color = ACCENT_GRADIENT
+table.insert(spinners, pillGrad)
+
+local PillText = Instance.new("TextLabel", TopPill)
+PillText.Size = UDim2.new(1, -20, 1, 0)
+PillText.Position = UDim2.fromOffset(10, 0)
+PillText.BackgroundTransparency = 1
+PillText.Font = Enum.Font.GothamBold
+PillText.Text = "⚡ CPZ Menu | JJS Edition by Zelynx | FPS: 60 | Ping: 0ms"
+PillText.TextColor3 = Theme.Text
+PillText.TextSize = 11
+
+local FloatBtn = Instance.new("TextButton", ScreenGui)
+FloatBtn.Size = UDim2.fromOffset(50, 50)
+FloatBtn.Position = UDim2.new(0, 20, 0.5, -25)
+FloatBtn.BackgroundColor3 = Theme.Panel
+FloatBtn.Font = Enum.Font.GothamBlack
+FloatBtn.Text = "HUB"
+FloatBtn.TextColor3 = Theme.Accent
+FloatBtn.TextSize = 13
+FloatBtn.AutoButtonColor = false
+FloatBtn.BorderSizePixel = 0
+Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 12)
+local floatStroke = Instance.new("UIStroke", FloatBtn)
+floatStroke.Thickness = 2
+floatStroke.Color = Color3.new(1, 1, 1)
+local floatGrad = Instance.new("UIGradient", floatStroke)
+floatGrad.Color = ACCENT_GRADIENT
+table.insert(spinners, floatGrad)
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.fromOffset(630, 400)
+MainFrame.Position = UDim2.fromScale(0.5, 0.52)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.BackgroundColor3 = Theme.Bg
+MainFrame.BackgroundColor3 = Theme.Background
+MainFrame.BackgroundTransparency = 0.05
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
-MainFrame.Parent = SG
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
 
-local Stroke = Instance.new("UIStroke", MainFrame)
-Stroke.Color = Theme.Accent
-Stroke.Thickness = 2
+local mainStroke = Instance.new("UIStroke", MainFrame)
+mainStroke.Thickness = 2
+mainStroke.Color = Color3.new(1, 1, 1)
+local mainGrad = Instance.new("UIGradient", mainStroke)
+mainGrad.Color = ACCENT_GRADIENT
+table.insert(spinners, mainGrad)
 
-local Topbar = Instance.new("Frame", MainFrame)
-Topbar.Size = UDim2.new(1, 0, 0, 40)
-Topbar.BackgroundColor3 = Theme.Panel
-Topbar.BorderSizePixel = 0
-Instance.new("UICorner", Topbar).CornerRadius = UDim.new(0, 10)
+local BgImage = Instance.new("ImageLabel", MainFrame)
+BgImage.Size = UDim2.fromScale(1, 1)
+BgImage.BackgroundTransparency = 1
+BgImage.Image = "rbxassetid://15906773556"
+BgImage.ImageTransparency = 0.55
+BgImage.ScaleType = Enum.ScaleType.Crop
+BgImage.ZIndex = 1
+Instance.new("UICorner", BgImage).CornerRadius = UDim.new(0, 12)
 
-local Title = Instance.new("TextLabel", Topbar)
-Title.Size = UDim2.new(1, -50, 1, 0)
-Title.Position = UDim2.fromOffset(15, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "🔥 Zelynx Hub | Bilingual & Optimized (No Clutter)"
-Title.TextColor3 = Theme.Accent
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
+local BgShade = Instance.new("Frame", MainFrame)
+BgShade.Size = UDim2.fromScale(1, 1)
+BgShade.BackgroundColor3 = Theme.Background
+BgShade.BackgroundTransparency = 0.35
+BgShade.BorderSizePixel = 0
+BgShade.ZIndex = 1
+Instance.new("UICorner", BgShade).CornerRadius = UDim.new(0, 12)
 
-local CloseBtn = Instance.new("TextButton", Topbar)
-CloseBtn.Size = UDim2.fromOffset(24, 24)
-CloseBtn.Position = UDim2.new(1, -34, 0.5, -12)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+local Header = Instance.new("Frame", MainFrame)
+Header.Size = UDim2.new(1, 0, 0, 44)
+Header.BackgroundColor3 = Theme.Panel
+Header.BackgroundTransparency = 0.15
+Header.BorderSizePixel = 0
+Header.ZIndex = 2
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
+
+local TitleLbl = Instance.new("TextLabel", Header)
+TitleLbl.Size = UDim2.new(1, -100, 1, 0)
+TitleLbl.Position = UDim2.fromOffset(16, 0)
+TitleLbl.BackgroundTransparency = 1
+TitleLbl.Font = Enum.Font.GothamBlack
+TitleLbl.Text = "CPZ Menu  •  JJS Edition by Zelynx"
+TitleLbl.TextColor3 = Theme.Accent
+TitleLbl.TextSize = 15
+TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+TitleLbl.ZIndex = 3
+
+local MinBtn = Instance.new("TextButton", Header)
+MinBtn.Size = UDim2.fromOffset(26, 26)
+MinBtn.Position = UDim2.new(1, -64, 0.5, -13)
+MinBtn.BackgroundColor3 = Theme.Element
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Text = "—"
+MinBtn.TextColor3 = Theme.Text
+MinBtn.TextSize = 12
+MinBtn.ZIndex = 3
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
+
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.Size = UDim2.fromOffset(26, 26)
+CloseBtn.Position = UDim2.new(1, -32, 0.5, -13)
+CloseBtn.BackgroundColor3 = Theme.Danger
+CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 12
+CloseBtn.ZIndex = 3
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-CloseBtn.MouseButton1Click:Connect(function() SG:Destroy() end)
 
 local Sidebar = Instance.new("ScrollingFrame", MainFrame)
-Sidebar.Size = UDim2.new(0, 160, 1, -50)
-Sidebar.Position = UDim2.fromOffset(10, 45)
+Sidebar.Size = UDim2.new(0, 175, 1, -58)
+Sidebar.Position = UDim2.fromOffset(10, 50)
 Sidebar.BackgroundColor3 = Theme.Panel
+Sidebar.BackgroundTransparency = 0.2
 Sidebar.BorderSizePixel = 0
 Sidebar.ScrollBarThickness = 2
 Sidebar.ScrollBarImageColor3 = Theme.Accent
-Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 8)
-local SideLayout = Instance.new("UIListLayout", Sidebar)
-SideLayout.Padding = UDim.new(0, 5)
-Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0, 5)
-Instance.new("UIPadding", Sidebar).PaddingLeft = UDim.new(0, 5)
+Sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
+Sidebar.ZIndex = 2
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 10)
+local sidePad = Instance.new("UIPadding", Sidebar)
+sidePad.PaddingTop = UDim.new(0, 6)
+sidePad.PaddingBottom = UDim.new(0, 6)
+sidePad.PaddingLeft = UDim.new(0, 6)
+sidePad.PaddingRight = UDim.new(0, 6)
+local sideLayout = Instance.new("UIListLayout", Sidebar)
+sideLayout.Padding = UDim.new(0, 5)
+sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-local Content = Instance.new("Frame", MainFrame)
-Content.Size = UDim2.new(1, -185, 1, -50)
-Content.Position = UDim2.fromOffset(175, 45)
-Content.BackgroundColor3 = Theme.Panel
-Content.BackgroundTransparency = 0.5
-Content.BorderSizePixel = 0
-Instance.new("UICorner", Content).CornerRadius = UDim.new(0, 8)
+local ContentHolder = Instance.new("Frame", MainFrame)
+ContentHolder.Size = UDim2.new(1, -203, 1, -58)
+ContentHolder.Position = UDim2.fromOffset(193, 50)
+ContentHolder.BackgroundColor3 = Theme.Panel
+ContentHolder.BackgroundTransparency = 0.25
+ContentHolder.BorderSizePixel = 0
+ContentHolder.ZIndex = 2
+Instance.new("UICorner", ContentHolder).CornerRadius = UDim.new(0, 10)
 
-local dragging, dragInput, dragStart, startPos
-Topbar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-    end
-end)
-Topbar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
+makeDraggable(Header, MainFrame)
+makeDraggable(FloatBtn, FloatBtn, function() MainFrame.Visible = not MainFrame.Visible end)
+makeDraggable(TopPill, TopPill, function() MainFrame.Visible = not MainFrame.Visible end)
 
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-end)
-
-local Tabs = {}
-local ActiveTab = nil
-
-local function CreateTab(name)
-    local btn = Instance.new("TextButton", Sidebar)
-    btn.Size = UDim2.new(1, -10, 0, 32)
-    btn.BackgroundColor3 = Theme.Bg
-    btn.Text = " " .. name
-    btn.TextColor3 = Theme.Text
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextSize = 12
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
-    local page = Instance.new("ScrollingFrame", Content)
-    page.Size = UDim2.new(1, -10, 1, -10)
-    page.Position = UDim2.fromOffset(5, 5)
-    page.BackgroundTransparency = 1
-    page.ScrollBarThickness = 2
-    page.ScrollBarImageColor3 = Theme.Accent
-    page.Visible = false
-    local layout = Instance.new("UIListLayout", page)
-    layout.Padding = UDim.new(0, 6)
-
-    btn.MouseButton1Click:Connect(function()
-        for _, t in ipairs(Tabs) do
-            t.Page.Visible = false
-            t.Btn.TextColor3 = Theme.Text
-            t.Btn.BackgroundColor3 = Theme.Bg
+local MenuToggleKey = Enum.KeyCode.F
+track(UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and UserInputService:GetFocusedTextBox() == nil then
+        if input.KeyCode == MenuToggleKey or input.KeyCode == Enum.KeyCode.RightShift then
+            MainFrame.Visible = not MainFrame.Visible
         end
-        page.Visible = true
-        btn.TextColor3 = Theme.Accent
-        btn.BackgroundColor3 = Theme.Panel
-    end)
-
-    local tabObj = {Btn = btn, Page = page}
-    table.insert(Tabs, tabObj)
-    if #Tabs == 1 then
-        page.Visible = true
-        btn.TextColor3 = Theme.Accent
-        btn.BackgroundColor3 = Theme.Panel
     end
+end))
 
-    local api = {}
-    function api:Toggle(enName, vnName, callback)
-        local frame = Instance.new("TextButton", page)
-        frame.Size = UDim2.new(1, -10, 0, 36)
-        frame.BackgroundColor3 = Theme.Bg
-        frame.Text = ""
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-
-        local lbl = Instance.new("TextLabel", frame)
-        lbl.Size = UDim2.new(1, -60, 1, 0)
-        lbl.Position = UDim2.fromOffset(10, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = string.format("%s
-<font size='10' color='#A0A0A0'>%s</font>", enName, vnName)
-        lbl.RichText = true
-        lbl.TextColor3 = Theme.Text
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 12
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-        local switch = Instance.new("Frame", frame)
-        switch.Size = UDim2.fromOffset(36, 18)
-        switch.Position = UDim2.new(1, -46, 0.5, -9)
-        switch.BackgroundColor3 = Theme.Off
-        Instance.new("UICorner", switch).CornerRadius = UDim.new(1, 0)
-
-        local knob = Instance.new("Frame", switch)
-        knob.Size = UDim2.fromOffset(12, 12)
-        knob.Position = UDim2.new(0, 3, 0.5, -6)
-        knob.BackgroundColor3 = Color3.new(1, 1, 1)
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
-        local state = false
-        frame.MouseButton1Click:Connect(function()
-            state = not state
-            TweenService:Create(switch, TweenInfo.new(0.2), {BackgroundColor3 = state and Theme.Accent or Theme.Off}):Play()
-            TweenService:Create(knob, TweenInfo.new(0.2), {Position = state and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)}):Play()
-            if callback then callback(state) end
-        end)
+local fpsCount, lastFpsTime = 0, os.clock()
+track(RunService.RenderStepped:Connect(function()
+    fpsCount = fpsCount + 1
+    local now = os.clock()
+    local rot = (now * 65) % 360
+    for _, g in ipairs(spinners) do
+        if g and g.Parent then g.Rotation = rot end
     end
-
-    function api:Button(enName, vnName, callback)
-        local btn = Instance.new("TextButton", page)
-        btn.Size = UDim2.new(1, -10, 0, 36)
-        btn.BackgroundColor3 = Theme.Bg
-        btn.Text = string.format("▶ %s | %s", enName, vnName)
-        btn.TextColor3 = Theme.Accent
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 12
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-        btn.MouseButton1Click:Connect(function()
-            if callback then task.spawn(callback) end
-        end)
+    if now - lastFpsTime >= 0.5 then
+        local fps = math.floor(fpsCount / (now - lastFpsTime))
+        fpsCount = 0
+        lastFpsTime = now
+        local ping = 0
+        pcall(function() ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+        PillText.Text = string.format("⚡ CPZ Menu | JJS Edition by Zelynx | FPS: %d | Ping: %dms", fps, ping)
     end
-    
-    function api:Input(enName, vnName, callback)
-        local frame = Instance.new("Frame", page)
-        frame.Size = UDim2.new(1, -10, 0, 40)
-        frame.BackgroundColor3 = Theme.Bg
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+end))
 
-        local lbl = Instance.new("TextLabel", frame)
-        lbl.Size = UDim2.new(0.5, -10, 1, 0)
-        lbl.Position = UDim2.fromOffset(10, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = string.format("%s
-<font size='10' color='#A0A0A0'>%s</font>", enName, vnName)
-        lbl.RichText = true
-        lbl.TextColor3 = Theme.Text
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 12
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-        local box = Instance.new("TextBox", frame)
-        box.Size = UDim2.new(0.45, 0, 0, 26)
-        box.Position = UDim2.new(0.5, 0, 0.5, -13)
-        box.BackgroundColor3 = Theme.Off
-        box.Text = ""
-        box.PlaceholderText = "..."
-        box.TextColor3 = Theme.Text
-        box.Font = Enum.Font.Gotham
-        box.TextSize = 11
-        Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
-        box.FocusLost:Connect(function()
-            if callback then callback(box.Text) end
-        end)
-    end
-
-    return api
-end
-
-local State = {
-    AutoBlock = false,
-    AutoFlank = false,
-    ItemESP = false,
-    DoorESP = false,
-    Fly = false,
-    Noclip = false,
-    ACBypass = false,
-    PremiumKey = false,
-    Invis = false
+local BilingualDict = {
+    ["Gojo Techs"] = "Gojo Techs | Kỹ Năng Gojo",
+    ["GOJO KILL ALL!"] = "GOJO KILL ALL! | Gojo Diệt Toàn Server",
+    ["Inf R special (no Ariel)"] = "Inf R Special | Vô Hạn Dịch Chuyển R",
+    ["R special tech!"] = "R Special Tech | Kỹ Thuật Xoay R",
+    ["Utilities"] = "Utilities | Tiện Ích",
+    ["AC BYPASS"] = "AC Bypass | Vượt Chống Hack",
+    ["Rockets"] = "Rockets | Tên Lửa",
+    ["Auto Rocket Ride"] = "Auto Rocket Ride | Tự Cưỡi Tên Lửa",
+    ["Auto Perfect Aim"] = "Auto Perfect Aim | Tự Ngắm Chuẩn",
+    ["Aim Smoothness"] = "Aim Smoothness | Độ Mượt Ngắm",
+    ["Items"] = "Items | Vật Phẩm",
+    ["Select Item"] = "Select Item | Chọn Vật Phẩm",
+    ["Refresh Item List"] = "Refresh Item List | Làm Mới Danh Sách",
+    ["Teleport Grab Item"] = "Teleport Grab Item | Dịch Chuyển Nhặt Đồ",
+    ["Item ESP"] = "Item ESP | Định Vị Vật Phẩm",
+    ["Max Render Distance"] = "Max Render Distance | Khoảng Cách Hiển Thị",
+    ["Item ESP Color"] = "Item ESP Color | Màu Định Vị Đồ",
+    ["Melee"] = "Melee | Đỡ Đòn Cận Chiến",
+    ["Auto Block"] = "Auto Block | Tự Động Đỡ Đòn",
+    ["Block In Attack"] = "Block In Attack | Đỡ Khi Đang Đánh",
+    ["Hit Glow Block"] = "Hit Glow Block | Đỡ Theo Hiệu Ứng Đòn",
+    ["Anti Feint"] = "Anti Feint | Chống Đòn Nhử (Feint)",
+    ["Range"] = "Range | Phạm Vi",
+    ["Facing Check"] = "Facing Check | Kiểm Tra Hướng Nhìn",
+    ["Facing Angle"] = "Facing Angle | Góc Nhìn",
+    ["Projectile"] = "Projectile | Đỡ Đòn Tầm Xa",
+    ["Projectile Block"] = "Projectile Block | Tự Đỡ Đạn / Chiêu Xa",
+    ["Max Range"] = "Max Range | Tầm Xa Tối Đa",
+    ["Custom Duration"] = "Custom Duration | Tùy Chỉnh Thời Gian Giữ",
+    ["Duration"] = "Duration | Thời Lượng",
+    ["Ping Comp"] = "Ping Comp | Bù Trừ Độ Trễ (Ping)",
+    ["Punish"] = "Punish | Phản Công",
+    ["Lock On Block"] = "Lock On Block | Khóa Mục Tiêu Khi Đỡ",
+    ["Auto Punish"] = "Auto Punish | Tự Động Phản Đòn",
+    ["Punish Range"] = "Punish Range | Tầm Phản Đòn",
+    ["Punish Delay"] = "Punish Delay | Độ Trễ Phản Đòn",
+    ["Bypasses"] = "Bypasses | Chống Phản Đòn",
+    ["No Block Counter"] = "No Block Counter | Không Đỡ Khi Địch Counter",
+    ["Counter Anime"] = "Counter Anime | Tắt Hoạt Ảnh Counter",
+    ["No Stun"] = "No Stun | Xóa Choáng",
+    ["TURN ON CLASSIC CAMERA SETTING!!!"] = "Camera Lock | Khóa Camera (Bật Camera Cổ Điển)",
+    ["Lock On"] = "Lock On | Khóa Mục Tiêu",
+    ["Lock On Key"] = "Lock On Key | Phím Khóa Mục Tiêu",
+    ["Body Lock"] = "Body Lock | Xoay Người Theo Địch",
+    ["Mobile Button"] = "Mobile Button | Nút Bấm Trên Màn Hình",
+    ["Movement"] = "Movement | Di Chuyển",
+    ["Fly"] = "Fly | Bay Lượn",
+    ["Fly Speed"] = "Fly Speed | Tốc Độ Bay",
+    ["Domain Walk"] = "Domain Walk | Đi Xuyên Lãnh Địa",
+    ["Noclip"] = "Noclip | Đi Xuyên Tường",
+    ["Backflip"] = "Backflip | Nhào Lộn Ngược",
+    ["Backflip Key"] = "Backflip Key | Phím Nhào Lộn",
+    ["Anti Counter"] = "Anti Counter | Chống Địch Phản Đòn",
+    ["Turn Away"] = "Turn Away | Tự Quay Lưng Khi Địch Counter",
+    ["Turn Time"] = "Turn Time | Thời Gian Quay Lưng",
+    ["Counter Distance"] = "Counter Distance | Khoảng Cách Phát Hiện",
+    ["Weight"] = "Weight | Trọng Lực Khi Ngã",
+    ["Ragdoll Weight"] = "Ragdoll Weight | Chỉnh Nặng Người Khi Ngã",
+    ["Hitbox & Respawn"] = "Hitbox & Respawn | Mở Rộng Đòn & Hồi Sinh",
+    ["Hitbox Expander"] = "Hitbox Expander | Mở Rộng Vùng Đánh",
+    ["Hitbox Size"] = "Hitbox Size | Kích Thước Vùng Đánh",
+    ["Auto Respawn"] = "Auto Respawn | Tự Hồi Sinh Khi Yếu Máu",
+    ["Respawn Health %"] = "Respawn Health % | % Máu Tự Hồi Sinh",
+    ["Shortcuts"] = "Shortcuts | Phím Tắt Nhanh",
+    ["Infinite Parkour"] = "Infinite Parkour | Parkour Vô Hạn",
+    ["Invis Toggle"] = "Invis Toggle | Bật/Tắt Tàng Hình Nhanh",
+    ["Infinite Side Dash"] = "Infinite Side Dash | Lướt Ngang Vô Hạn",
+    ["Predictive Lock"] = "Predictive Lock | Khóa Đón Đầu Di Chuyển",
+    ["Predictive Lock On"] = "Predictive Lock On | Khóa Đón Đầu",
+    ["Prediction Time"] = "Prediction Time | Thời Gian Đón Đầu",
+    ["M1"] = "M1 | Đánh Thường",
+    ["M1 Surf"] = "M1 Surf | Lướt Trên Đầu Địch Khi M1",
+    ["Surf Delay"] = "Surf Delay | Độ Trễ Lướt",
+    ["Steal Downslam"] = "Steal Downslam | Ép Đập Xuống Đất (Downslam)",
+    ["Uppercut"] = "Uppercut | Ép Đánh Hất Tung",
+    ["Flank"] = "Flank | Lướt Bọc Hậu",
+    ["Legit Flank"] = "Legit Flank | Bọc Hậu Mượt (Hợp Lệ)",
+    ["Side Dash Behind"] = "Side Dash Behind | Lướt Ngang Ra Sau Lưng",
+    ["Behind Range"] = "Behind Range | Tầm Lướt Sau Lưng",
+    ["No Dash Force"] = "No Dash Force | Xóa Lực Đẩy Thừa Khi Lướt",
+    ["Auto Flank"] = "Auto Flank | Tự Động Bọc Hậu",
+    ["Auto M1"] = "Auto M1 | Tự Đánh Sau Khi Bọc Hậu",
+    ["Flank Key"] = "Flank Key | Phím Bọc Hậu",
+    ["Distance"] = "Distance | Khoảng Cách",
+    ["Curve"] = "Curve | Độ Cong Vòng Lướt",
+    ["Time"] = "Time | Thời Gian Lướt",
+    ["Catch"] = "Catch | Bắt Địch Đang Lướt",
+    ["M1 Catch"] = "M1 Catch | Tự Đánh Khi Địch Lướt Lại",
+    ["Catch Range"] = "Catch Range | Tầm Bắt Địch",
+    ["Auto Face"] = "Auto Face | Tự Quay Mặt Về Phía Địch",
+    ["Ult M1"] = "Ult M1 | Lướt Đuổi Theo Khi M1",
+    ["Speed"] = "Speed | Tốc Độ",
+    ["Combat"] = "Combat | Chiến Đấu",
+    ["Perfect BFC"] = "Perfect BFC | Hắc Thiểm Sau Lưng Chuẩn",
+    ["Auto Black Flash"] = "Auto Black Flash | Tự Động Hắc Thiểm",
+    ["BF Assist"] = "BF Assist | Hỗ Trợ Hắc Thiểm",
+    ["No Dash"] = "No Dash | Không Lướt Khi Dùng Chiêu",
+    ["Auto Feint"] = "Auto Feint | Tự Hủy Chiêu Khi Trượt",
+    ["Strikes"] = "Strikes | Lướt Dài Khi Đấm Liên Hoàn",
+    ["Bad Legit BFC"] = "Bad Legit BFC | Hắc Thiểm Bọc Hậu Nhẹ",
+    ["Trigger Tech"] = "Trigger Tech | Kích Hoạt Kỹ Thuật Ngay",
+    ["Settings"] = "Settings | Thông Số Tinh Chỉnh",
+    ["Perfect Time"] = "Perfect Time | Thời Gian Chuẩn",
+    ["Legit Speed"] = "Legit Speed | Tốc Độ Lướt Hợp Lệ",
+    ["Burst Delay"] = "Burst Delay | Độ Trễ Kích Nổ Nhịp 2",
+    ["Feint Delay"] = "Feint Delay | Độ Trễ Hủy Chiêu",
+    ["Ambush"] = "Ambush | Đột Kích Sau Lưng",
+    ["Auto Ambush"] = "Auto Ambush | Hiện Nút Đột Kích",
+    ["Ambush Key"] = "Ambush Key | Phím Đột Kích",
+    ["Dodge"] = "Dodge | Tự Động Né Đòn",
+    ["Auto Dodge"] = "Auto Dodge | Tự Động Né Đòn Cận Chiến",
+    ["Dodge In Attack"] = "Dodge In Attack | Né Khi Đang Đánh",
+    ["Hit Glow Dodge"] = "Hit Glow Dodge | Né Theo Hiệu Ứng Đòn",
+    ["Dodge Range"] = "Dodge Range | Phạm Vi Tự Né",
+    ["Projectile Dodge"] = "Projectile Dodge | Tự Né Đạn / Chiêu Xa",
+    ["Proj Range"] = "Proj Range | Tầm Phát Hiện Đạn",
+    ["Proj Angle"] = "Proj Angle | Góc Né Đạn",
+    ["No Dodge Counter"] = "No Dodge Counter | Không Né Khi Địch Counter",
+    ["Doors"] = "Doors | Cửa Sự Kiện",
+    ["Door ESP"] = "Door ESP | Định Vị Cửa Sự Kiện",
+    ["Get All Doors"] = "Get All Doors | Dịch Chuyển Mở Toàn Bộ Cửa",
+    ["TP to Door"] = "TP to Door | Dịch Chuyển Tới Cửa Gần Nhất",
+    ["Interact Door"] = "Interact Door | Mở Cửa Gần Nhất",
+    ["Prompts"] = "Prompts | Tương Tác Nhanh",
+    ["Instant Prompts"] = "Instant Prompts | Bấm Giữ Tức Thì (0 Giây)",
+    ["Boost Reach"] = "Boost Reach | Tăng Khoảng Cách Bấm Nút",
+    ["Reach Distance"] = "Reach Distance | Tầm Bấm Nút",
+    ["Ryu Tech"] = "Ryu Tech | Kỹ Thuật Lướt Bắn Ryu",
+    ["No Animation"] = "No Animation | Tắt Hoạt Ảnh Chiêu Ryu",
+    ["Tech Key"] = "Tech Key | Phím Kích Hoạt Tech",
+    ["Yuta Moveset & Tech"] = "Yuta Tech | Kỹ Thuật Yuta",
+    ["Insta Seal/kill Tech"] = "Insta Seal / Kill Tech | Kỹ Thuật Phong Ấn Tức Thì",
+    ["Inf Stun (Second Wind)"] = "Inf Stun | Khóa Địch Lơ Lửng Trên Không",
+    ["Kinematic Orbit"] = "Kinematic Orbit | Xoay Vòng Quanh Địch",
+    ["Orbit Enabled"] = "Orbit Enabled | Bật Xoay Vòng Quanh Địch",
+    ["Orbit Speed"] = "Orbit Speed | Tốc Độ Xoay",
+    ["Orbit Distance"] = "Orbit Distance | Bán Kính Xoay",
+    ["Orbit Height"] = "Orbit Height | Độ Cao Khi Xoay",
+    ["Lock Behind (Back Hunter)"] = "Lock Behind | Khóa Chặt Sau Lưng Địch",
+    ["Lock Behind Enabled"] = "Lock Behind Enabled | Bật Khóa Sau Lưng Địch",
+    ["Distance Behind Target"] = "Distance Behind | Khoảng Cách Sau Lưng",
+    ["Height Offset"] = "Height Offset | Độ Cao Chênh Lệch",
+    ["Predict Movement"] = "Predict Movement | Dự Đoán Hướng Đi",
+    ["Smooth Tracking"] = "Smooth Tracking | Bám Theo Mượt Mà",
+    ["Lerp Smoothing Factor"] = "Lerp Smoothing | Độ Mượt Bám Theo",
+    ["Ultra Instinct (Enhanced)"] = "Ultra Instinct | Bản Năng Vô Cực (Tự Dịch Chuyển Né)",
+    ["Ultra Instinct Enabled"] = "Ultra Instinct | Bật Bản Năng Vô Cực",
+    ["UI Dodge Mode"] = "UI Dodge Mode | Chế Độ Dịch Chuyển Né",
+    ["Filter Non-Attacks (Keywords)"] = "Filter Non-Attacks | Lọc Bỏ Chạy Bộ / Nhảy",
+    ["UI Trigger Range"] = "UI Trigger Range | Phạm Vi Kích Hoạt Né",
+    ["UI Facing Sensitivity"] = "UI Sensitivity | Độ Nhạy Góc Nhìn Địch",
+    ["UI Dodge Distance"] = "UI Dodge Distance | Khoảng Cách Dịch Chuyển Né",
+    ["UI Dodge Cooldown"] = "UI Dodge Cooldown | Thời Gian Hồi Né",
+    ["UI Dodge Animation"] = "UI Dodge Animation | Hoạt Ảnh Khi Né",
+    ["Targeting & Systems"] = "Targeting & Systems | Chọn Mục Tiêu & Hệ Thống",
+    ["Target Mode"] = "Target Mode | Chế Độ Chọn Mục Tiêu",
+    ["Selected Player"] = "Selected Player | Người Chơi Chỉ Định",
+    ["Max Target Range"] = "Max Target Range | Khoảng Cách Tìm Địch Tối Đa",
+    ["Auto Noclip"] = "Auto Noclip | Tự Xuyên Tường Khi Xoay/Khóa",
+    ["Mobile Button (Lol)"] = "Mobile Button (Lol) | Nút Bật Nhanh Trên Màn Hình",
+    ["Bypass & Stealth"] = "Bypass & Stealth | Vượt Chống Hack & Tàng Hình",
+    ["AC Bypass"] = "AC Bypass | Vượt Anti-Cheat",
+    ["True Desync Invisibility"] = "True Invisibility | Tàng Hình Tuyệt Đối (Desync)",
+    ["Stand Management"] = "Stand Management | Điều Khiển Stand (Hộ Vệ)",
+    ["Enable Stand Mode"] = "Enable Stand Mode | Bật Chế Độ Hóa Stand",
+    ["Master Target Player"] = "Master Player | Tên Chủ Nhân Điều Khiển",
+    ["Stand Position Side"] = "Stand Side | Vị Trí Đứng Của Stand",
 }
 
-local TabCombat = CreateTab("⚔️ Combat")
-TabCombat:Toggle("Perfect BFC (Yuji)", "Combo Chuẩn BFC", function(v) end)
-TabCombat:Toggle("Auto Flank", "Tự Động Bọc Hậu", function(v) State.AutoFlank = v end)
-TabCombat:Toggle("Auto Block", "Tự Động Đỡ Đòn", function(v) State.AutoBlock = v end)
-TabCombat:Toggle("Gojo Kill All", "Gojo Tiêu Diệt Hết", function(v) end)
+local function tr(txt)
+    local s = tostring(txt or "")
+    return BilingualDict[s] or s
+end
 
-local TabMove = CreateTab("🏃 Movement")
-TabMove:Toggle("Auto Dodge", "Tự Động Né", function(v) end)
-TabMove:Toggle("Ryu Glide", "Lướt Ryu", function(v) end)
-TabMove:Toggle("Fly Mode", "Chế Độ Bay", function(v) State.Fly = v end)
-TabMove:Toggle("Noclip", "Đi Xuyên Tường", function(v) State.Noclip = v end)
+local AllTabs = {}
 
-local TabVis = CreateTab("👁️ Visuals")
-TabVis:Toggle("Item ESP", "Tìm Vật Phẩm", function(v) State.ItemESP = v end)
-TabVis:Toggle("Door ESP", "Tìm Cửa Sự Kiện", function(v) State.DoorESP = v end)
+local function AddTab(title, icon)
+    local TabBtn = Instance.new("TextButton", Sidebar)
+    TabBtn.Size = UDim2.new(1, 0, 0, 32)
+    TabBtn.BackgroundColor3 = Theme.Element
+    TabBtn.BackgroundTransparency = 0.25
+    TabBtn.Font = Enum.Font.GothamSemibold
+    TabBtn.Text = "  " .. icon .. "  " .. title
+    TabBtn.TextColor3 = Theme.SubText
+    TabBtn.TextSize = 11
+    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    TabBtn.AutoButtonColor = false
+    TabBtn.ZIndex = 3
+    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 7)
 
-local TabUtil = CreateTab("⚙️ Utilities")
-TabUtil:Toggle("AC Bypass", "Vượt Anti-Cheat", function(v) State.ACBypass = v end)
-TabUtil:Toggle("Auto Respawn", "Tự Động Hồi Sinh", function(v) end)
+    local Indicator = Instance.new("Frame", TabBtn)
+    Indicator.Size = UDim2.new(0, 3, 0.6, 0)
+    Indicator.Position = UDim2.new(0, 2, 0.2, 0)
+    Indicator.BackgroundColor3 = Theme.Accent
+    Indicator.Visible = false
+    Indicator.ZIndex = 4
+    Instance.new("UICorner", Indicator).CornerRadius = UDim.new(1, 0)
 
-local TabVIP = CreateTab("💎 Premium")
-TabVIP:Input("Premium Key", "Nhập Mật Khẩu (0946)", function(txt)
-    if tostring(txt) == "0946" then
-        State.PremiumKey = true
-        StarterGui:SetCore("SendNotification", {Title = "VIP", Text = "Mở Khóa Tàng Hình & Stand!"})
-    else
-        StarterGui:SetCore("SendNotification", {Title = "Lỗi", Text = "Sai Mật Khẩu!"})
+    local Page = Instance.new("ScrollingFrame", ContentHolder)
+    Page.Size = UDim2.new(1, -16, 1, -16)
+    Page.Position = UDim2.fromOffset(8, 8)
+    Page.BackgroundTransparency = 1
+    Page.BorderSizePixel = 0
+    Page.ScrollBarThickness = 3
+    Page.ScrollBarImageColor3 = Theme.Accent
+    Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Page.Visible = false
+    Page.ZIndex = 3
+
+    local pLayout = Instance.new("UIListLayout", Page)
+    pLayout.Padding = UDim.new(0, 6)
+    pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        Page.CanvasSize = UDim2.new(0, 0, 0, pLayout.AbsoluteContentSize.Y + 14)
+    end)
+
+    local pPad = Instance.new("UIPadding", Page)
+    pPad.PaddingRight = UDim.new(0, 6)
+    pPad.PaddingBottom = UDim.new(0, 8)
+
+    local function selectTab()
+        for _, t in ipairs(AllTabs) do
+            t.Page.Visible = false
+            t.Btn.BackgroundColor3 = Theme.Element
+            t.Btn.BackgroundTransparency = 0.25
+            t.Btn.TextColor3 = Theme.SubText
+            t.Indicator.Visible = false
+        end
+        Page.Visible = true
+        TabBtn.BackgroundColor3 = Theme.PanelAlt
+        TabBtn.BackgroundTransparency = 0.05
+        TabBtn.TextColor3 = Theme.Accent
+        Indicator.Visible = true
     end
-end)
-TabVIP:Toggle("True Invisibility", "Tàng Hình Tuyệt Đối", function(v)
-    if State.PremiumKey then State.Invis = v else StarterGui:SetCore("SendNotification", {Title="Lỗi", Text="Cần nhập Key 0946 trước!"}) end
-end)
-TabVIP:Button("Call Stand", "Gọi Hỗ Trợ (Stand)", function()
-    if State.PremiumKey then StarterGui:SetCore("SendNotification", {Title="Stand", Text="Đã gọi Stand!"}) end
+
+    TabBtn.MouseButton1Click:Connect(selectTab)
+    table.insert(AllTabs, { Btn = TabBtn, Page = Page, Indicator = Indicator })
+    if #AllTabs == 1 then selectTab() end
+
+    local Tab = {}
+
+    function Tab:CreateSection(secName)
+        local Lbl = Instance.new("TextLabel", Page)
+        Lbl.Size = UDim2.new(1, 0, 0, 22)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Font = Enum.Font.GothamBold
+        Lbl.Text = "◆  " .. tr(type(secName) == "table" and (secName.Name or secName.Title) or secName)
+        Lbl.TextColor3 = Theme.Accent
+        Lbl.TextSize = 12
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.ZIndex = 3
+    end
+
+    function Tab:CreateParagraph(
+        return
+    end
+
+    function Tab:CreateButton(c, fnArg)
+        local cfg = type(c) == "table" and c or { Name = tostring(c), Callback = fnArg }
+        local bName = tr(cfg.Name or cfg.Title or cfg.Text or "Button")
+        local cb = cfg.Callback or cfg.Func or fnArg
+
+        local Btn = Instance.new("TextButton", Page)
+        Btn.Size = UDim2.new(1, 0, 0, 34)
+        Btn.BackgroundColor3 = Theme.Element
+        Btn.BackgroundTransparency = 0.12
+        Btn.Font = Enum.Font.GothamBold
+        Btn.Text = "  ▶  " .. bName
+        Btn.TextColor3 = Theme.Text
+        Btn.TextSize = 11
+        Btn.TextXAlignment = Enum.TextXAlignment.Left
+        Btn.AutoButtonColor = false
+        Btn.ZIndex = 3
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Btn)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        Btn.MouseButton1Click:Connect(function()
+            TweenService:Create(Btn, TweenInfo.new(0.1), { BackgroundColor3 = Theme.PanelAlt }):Play()
+            task.delay(0.12, function()
+                TweenService:Create(Btn, TweenInfo.new(0.15), { BackgroundColor3 = Theme.Element }):Play()
+            end)
+            if cb then task.spawn(cb) end
+        end)
+        return Btn
+    end
+
+    function Tab:CreateToggle(c, optArg)
+        local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+        local rawName = cfg.Name or cfg.Title or cfg.Text or (type(c) == "string" and c) or "Toggle"
+        local tName = tr(rawName)
+        local state = false
+        local cb = cfg.Callback
+
+        local Card = Instance.new("TextButton", Page)
+        Card.Size = UDim2.new(1, 0, 0, 36)
+        Card.BackgroundColor3 = Theme.Element
+        Card.BackgroundTransparency = 0.12
+        Card.Text = ""
+        Card.AutoButtonColor = false
+        Card.ZIndex = 3
+        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Card)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        local Lbl = Instance.new("TextLabel", Card)
+        Lbl.Size = UDim2.new(1, -66, 1, 0)
+        Lbl.Position = UDim2.fromOffset(10, 0)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Font = Enum.Font.GothamSemibold
+        Lbl.Text = tName
+        Lbl.TextColor3 = Theme.Text
+        Lbl.TextSize = 11
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.ZIndex = 3
+
+        local Switch = Instance.new("Frame", Card)
+        Switch.Size = UDim2.fromOffset(40, 20)
+        Switch.Position = UDim2.new(1, -50, 0.5, -10)
+        Switch.BackgroundColor3 = Theme.Off
+        Switch.ZIndex = 3
+        Instance.new("UICorner", Switch).CornerRadius = UDim.new(1, 0)
+
+        local Knob = Instance.new("Frame", Switch)
+        Knob.Size = UDim2.fromOffset(14, 14)
+        Knob.Position = UDim2.new(0, 3, 0.5, -7)
+        Knob.BackgroundColor3 = Color3.new(1, 1, 1)
+        Knob.ZIndex = 4
+        Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+
+        local function setToggle(val)
+            state = val
+            TweenService:Create(Switch, TweenInfo.new(0.15), { BackgroundColor3 = state and Theme.Accent or Theme.Off }):Play()
+            TweenService:Create(Knob, TweenInfo.new(0.15), { Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7) }):Play()
+            if cb then task.spawn(cb, state) end
+        end
+
+        Card.MouseButton1Click:Connect(function() setToggle(not state) end)
+        return { Set = setToggle, SetValue = setToggle }
+    end
+
+    function Tab:CreateSlider(c, optArg)
+        local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+        local rawName = cfg.Name or cfg.Title or cfg.Text or (type(c) == "string" and c) or "Slider"
+        local sName = tr(rawName)
+        local range = cfg.Range or { cfg.Min or 0, cfg.Max or 100 }
+        local minVal, maxVal = range[1], range[2]
+        local inc = cfg.Increment or cfg.Step or (cfg.Rounding == 2 and 0.01) or (cfg.Rounding == 1 and 0.1) or 1
+        local suffix = cfg.Suffix and (" " .. cfg.Suffix) or ""
+        local curVal = cfg.CurrentValue or cfg.Default or minVal
+        local cb = cfg.Callback
+
+        local Card = Instance.new("Frame", Page)
+        Card.Size = UDim2.new(1, 0, 0, 48)
+        Card.BackgroundColor3 = Theme.Element
+        Card.BackgroundTransparency = 0.12
+        Card.ZIndex = 3
+        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Card)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        local Lbl = Instance.new("TextLabel", Card)
+        Lbl.Size = UDim2.new(1, -90, 0, 20)
+        Lbl.Position = UDim2.fromOffset(10, 4)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Font = Enum.Font.GothamSemibold
+        Lbl.Text = sName
+        Lbl.TextColor3 = Theme.Text
+        Lbl.TextSize = 11
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.ZIndex = 3
+
+        local ValLbl = Instance.new("TextLabel", Card)
+        ValLbl.Size = UDim2.fromOffset(80, 20)
+        ValLbl.Position = UDim2.new(1, -90, 0, 4)
+        ValLbl.BackgroundTransparency = 1
+        ValLbl.Font = Enum.Font.GothamBold
+        ValLbl.Text = tostring(curVal) .. suffix
+        ValLbl.TextColor3 = Theme.Accent
+        ValLbl.TextSize = 11
+        ValLbl.TextXAlignment = Enum.TextXAlignment.Right
+        ValLbl.ZIndex = 3
+
+        local BarBg = Instance.new("TextButton", Card)
+        BarBg.Size = UDim2.new(1, -20, 0, 8)
+        BarBg.Position = UDim2.fromOffset(10, 30)
+        BarBg.BackgroundColor3 = Theme.Off
+        BarBg.Text = ""
+        BarBg.AutoButtonColor = false
+        BarBg.ZIndex = 3
+        Instance.new("UICorner", BarBg).CornerRadius = UDim.new(1, 0)
+
+        local initAlpha = math.clamp((curVal - minVal) / math.max(0.0001, maxVal - minVal), 0, 1)
+        local Fill = Instance.new("Frame", BarBg)
+        Fill.Size = UDim2.new(initAlpha, 0, 1, 0)
+        Fill.BackgroundColor3 = Theme.Accent
+        Fill.BorderSizePixel = 0
+        Fill.ZIndex = 4
+        Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+
+        local sliding = false
+        local function updateVal(pos)
+            local relX = math.clamp((pos.X - BarBg.AbsolutePosition.X) / math.max(1, BarBg.AbsoluteSize.X), 0, 1)
+            local raw = minVal + (maxVal - minVal) * relX
+            local snapped = math.floor((raw / inc) + 0.5) * inc
+            snapped = tonumber(string.format("%.2f", math.clamp(snapped, minVal, maxVal)))
+            curVal = snapped
+            Fill.Size = UDim2.new((curVal - minVal) / math.max(0.0001, maxVal - minVal), 0, 1, 0)
+            ValLbl.Text = tostring(curVal) .. suffix
+            if cb then task.spawn(cb, curVal) end
+        end
+
+        BarBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliding = true
+                updateVal(input.Position)
+            end
+        end)
+        track(UserInputService.InputChanged:Connect(function(input)
+            if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                updateVal(input.Position)
+            end
+        end))
+        track(UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliding = false
+            end
+        end))
+    end
+
+    function Tab:CreateDropdown(c, optArg)
+        local cfg = type(c) == "table" and c or (type(optArg) == "table" and optArg or {})
+        local dName = tr(cfg.Name or cfg.Title or cfg.Text or "Dropdown")
+        local options = cfg.Options or cfg.Values or { "None" }
+        local current = cfg.CurrentOption or cfg.Default or options[1] or "None"
+        if type(current) == "table" then current = current[1] end
+        local cb = cfg.Callback
+        local isOpen = false
+
+        local Container = Instance.new("Frame", Page)
+        Container.Size = UDim2.new(1, 0, 0, 36)
+        Container.BackgroundColor3 = Theme.Element
+        Container.BackgroundTransparency = 0.12
+        Container.ClipsDescendants = true
+        Container.ZIndex = 3
+        Instance.new("UICorner", Container).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Container)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        local TopBtn = Instance.new("TextButton", Container)
+        TopBtn.Size = UDim2.new(1, 0, 0, 36)
+        TopBtn.BackgroundTransparency = 1
+        TopBtn.Font = Enum.Font.GothamSemibold
+        TopBtn.Text = "  " .. dName .. ":  [" .. tostring(current) .. "]  ▼"
+        TopBtn.TextColor3 = Theme.Text
+        TopBtn.TextSize = 11
+        TopBtn.TextXAlignment = Enum.TextXAlignment.Left
+        TopBtn.ZIndex = 3
+
+        local OptionList = Instance.new("Frame", Container)
+        OptionList.Size = UDim2.new(1, -16, 0, 0)
+        OptionList.Position = UDim2.fromOffset(8, 38)
+        OptionList.BackgroundTransparency = 1
+        OptionList.ZIndex = 3
+        local oLayout = Instance.new("UIListLayout", OptionList)
+        oLayout.Padding = UDim.new(0, 4)
+
+        local function rebuild(newOpts)
+            options = newOpts or options
+            for _, ch in ipairs(OptionList:GetChildren()) do
+                if ch:IsA("TextButton") then ch:Destroy() end
+            end
+            for _, opt in ipairs(options) do
+                local OBtn = Instance.new("TextButton", OptionList)
+                OBtn.Size = UDim2.new(1, 0, 0, 26)
+                OBtn.BackgroundColor3 = Theme.PanelAlt
+                OBtn.Font = Enum.Font.GothamSemibold
+                OBtn.Text = tostring(opt)
+                OBtn.TextColor3 = Theme.Text
+                OBtn.TextSize = 11
+                OBtn.ZIndex = 4
+                Instance.new("UICorner", OBtn).CornerRadius = UDim.new(0, 5)
+                OBtn.MouseButton1Click:Connect(function()
+                    current = opt
+                    TopBtn.Text = "  " .. dName .. ":  [" .. tostring(current) .. "]  ▼"
+                    isOpen = false
+                    Container.Size = UDim2.new(1, 0, 0, 36)
+                    if cb then task.spawn(cb, current) end
+                end)
+            end
+            if isOpen then Container.Size = UDim2.new(1, 0, 0, 42 + (#options * 30)) end
+        end
+
+        TopBtn.MouseButton1Click:Connect(function()
+            isOpen = not isOpen
+            Container.Size = isOpen and UDim2.new(1, 0, 0, 42 + (#options * 30)) or UDim2.new(1, 0, 0, 36)
+        end)
+        rebuild(options)
+
+        return {
+            Refresh = function(_, newList) rebuild(newList) end,
+            Set = function(_, val)
+                current = val
+                TopBtn.Text = "  " .. dName .. ":  [" .. tostring(current) .. "]  ▼"
+                if cb then task.spawn(cb, current) end
+            end
+        }
+    end
+
+    function Tab:CreateKeybind(c)
+        local cfg = c or {}
+        local kName = tr(cfg.Name or cfg.Title or cfg.Text or "Keybind")
+        local keyStr = cfg.CurrentKeybind or (typeof(cfg.Default) == "EnumItem" and cfg.Default.Name) or cfg.Default or "E"
+        local currentKey = typeof(cfg.Default) == "EnumItem" and cfg.Default or (Enum.KeyCode[tostring(keyStr)] or Enum.KeyCode.E)
+        local binding = false
+
+        local Card = Instance.new("Frame", Page)
+        Card.Size = UDim2.new(1, 0, 0, 36)
+        Card.BackgroundColor3 = Theme.Element
+        Card.BackgroundTransparency = 0.12
+        Card.ZIndex = 3
+        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Card)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        local Lbl = Instance.new("TextLabel", Card)
+        Lbl.Size = UDim2.new(1, -100, 1, 0)
+        Lbl.Position = UDim2.fromOffset(10, 0)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Font = Enum.Font.GothamSemibold
+        Lbl.Text = kName
+        Lbl.TextColor3 = Theme.Text
+        Lbl.TextSize = 11
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.ZIndex = 3
+
+        local KeyBtn = Instance.new("TextButton", Card)
+        KeyBtn.Size = UDim2.fromOffset(76, 24)
+        KeyBtn.Position = UDim2.new(1, -86, 0.5, -12)
+        KeyBtn.BackgroundColor3 = Theme.PanelAlt
+        KeyBtn.Font = Enum.Font.GothamBold
+        KeyBtn.Text = "[" .. tostring(currentKey.Name) .. "]"
+        KeyBtn.TextColor3 = Theme.Accent
+        KeyBtn.TextSize = 11
+        KeyBtn.ZIndex = 3
+        Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 5)
+
+        KeyBtn.MouseButton1Click:Connect(function()
+            binding = true
+            KeyBtn.Text = "[...]"
+        end)
+
+        track(UserInputService.InputBegan:Connect(function(input, gpe)
+            if binding then
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    currentKey = input.KeyCode
+                    KeyBtn.Text = "[" .. currentKey.Name .. "]"
+                    binding = false
+                    if cfg.OnChange then pcall(cfg.OnChange, currentKey) end
+                end
+                return
+            end
+            if not gpe and UserInputService:GetFocusedTextBox() == nil then
+                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == currentKey then
+                    if cfg.Callback then task.spawn(cfg.Callback, currentKey) end
+                end
+            end
+        end))
+    end
+
+    function Tab:CreateInput(c)
+        local cfg = c or {}
+        local iName = tr(cfg.Name or cfg.Title or cfg.Text or "Input")
+
+        local Card = Instance.new("Frame", Page)
+        Card.Size = UDim2.new(1, 0, 0, 38)
+        Card.BackgroundColor3 = Theme.Element
+        Card.BackgroundTransparency = 0.12
+        Card.ZIndex = 3
+        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 7)
+        local st = Instance.new("UIStroke", Card)
+        st.Thickness = 1
+        st.Color = Theme.Stroke
+
+        local Lbl = Instance.new("TextLabel", Card)
+        Lbl.Size = UDim2.new(0.52, -10, 1, 0)
+        Lbl.Position = UDim2.fromOffset(10, 0)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Font = Enum.Font.GothamSemibold
+        Lbl.Text = iName
+        Lbl.TextColor3 = Theme.Text
+        Lbl.TextSize = 11
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.ZIndex = 3
+
+        local Box = Instance.new("TextBox", Card)
+        Box.Size = UDim2.new(0.46, -10, 0, 26)
+        Box.Position = UDim2.new(0.54, 0, 0.5, -13)
+        Box.BackgroundColor3 = Theme.PanelAlt
+        Box.Font = Enum.Font.Gotham
+        Box.PlaceholderText = tostring(cfg.PlaceholderText or "Nhập...")
+        Box.PlaceholderColor3 = Theme.SubText
+        Box.Text = ""
+        Box.TextColor3 = Theme.Text
+        Box.TextSize = 11
+        Box.ClearTextOnFocus = false
+        Box.ZIndex = 3
+        Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 5)
+
+        Box.FocusLost:Connect(function()
+            local txt = Box.Text
+            if cfg.RemoveTextAfterFocusLost then Box.Text = "" end
+            if cfg.Callback then task.spawn(cfg.Callback, txt) end
+        end)
+    end
+
+    function Tab:CreateColorPicker(c)
+        local cfg = c or {}
+        local cName = tr(cfg.Name or cfg.Title or "Color Picker")
+        local colors = {
+            Color3.fromRGB(255, 200, 60),
+            Color3.fromRGB(0, 229, 255),
+            Color3.fromRGB(185, 75, 255),
+            Color3.fromRGB(70, 220, 130),
+            Color3.fromRGB(240, 65, 85),
+            Color3.fromRGB(255, 255, 255),
+        }
+        local idx = 1
+
+        local Btn = Instance.new("TextButton", Page)
+        Btn.Size = UDim2.new(1, 0, 0, 36)
+        Btn.BackgroundColor3 = Theme.Element
+        Btn.BackgroundTransparency = 0.12
+        Btn.Font = Enum.Font.GothamSemibold
+        Btn.Text = "  🎨  " .. cName
+        Btn.TextColor3 = Theme.Text
+        Btn.TextSize = 11
+        Btn.TextXAlignment = Enum.TextXAlignment.Left
+        Btn.AutoButtonColor = false
+        Btn.ZIndex = 3
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 7)
+
+        local Preview = Instance.new("Frame", Btn)
+        Preview.Size = UDim2.fromOffset(20, 20)
+        Preview.Position = UDim2.new(1, -30, 0.5, -10)
+        Preview.BackgroundColor3 = cfg.Color or colors[1]
+        Preview.ZIndex = 4
+        Instance.new("UICorner", Preview).CornerRadius = UDim.new(1, 0)
+
+        Btn.MouseButton1Click:Connect(function()
+            idx = (idx % #colors) + 1
+            Preview.BackgroundColor3 = colors[idx]
+            if cfg.Callback then task.spawn(cfg.Callback, colors[idx]) end
+        end)
+    end
+
+    Tab.AddSection = Tab.CreateSection
+    Tab.AddParagraph = Tab.CreateParagraph
+    Tab.AddButton = Tab.CreateButton
+    Tab.AddToggle = Tab.CreateToggle
+    Tab.AddSlider = Tab.CreateSlider
+    Tab.AddDropdown = Tab.CreateDropdown
+    Tab.AddKeybind = Tab.CreateKeybind
+    Tab.AddInput = Tab.CreateInput
+    Tab.AddColorPicker = Tab.CreateColorPicker
+    Tab.AddLeftGroupbox = function(self, n) self:CreateSection(n) return self end
+    Tab.AddRightGroupbox = function(self, n) self:CreateSection(n) return self end
+
+    return Tab
+end
+
+env.ZelynxCPZ_Cleanup = function()
+    for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+    table.clear(connections)
+    table.clear(spinners)
+    pcall(function() ScreenGui:Destroy() end)
+    env.ZelynxCPZ_Cleanup = nil
+end
+
+CloseBtn.MouseButton1Click:Connect(function()
+    if env.ZelynxCPZ_Cleanup then env.ZelynxCPZ_Cleanup() end
 end)
 
-RunService.RenderStepped:Connect(function()
-    if State.Noclip and LocalPlayer.Character then
-        for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = false end
+local Tabs = {
+    AllChar   = AddTab("Chung | All Chars", "⚡"),
+    M1        = AddTab("Đánh Thường | M1", "👊"),
+    AutoBlock = AddTab("Đỡ Đòn | Block", "🛡️"),
+    OP        = AddTab("Xoay & Né | OP UI", "👁️"),
+    Yuji      = AddTab("Yuji Itadori", "🔥"),
+    Gojo      = AddTab("Satoru Gojo", "🌀"),
+    Yuta      = AddTab("Yuta Okkotsu", "💍"),
+    Ryu       = AddTab("Ryu Ishigori", "💥"),
+    Haruta    = AddTab("Haruta", "🗡️"),
+    Items     = AddTab("Vật Phẩm | Items", "🎒"),
+    Event     = AddTab("Sự Kiện | Event", "🎃"),
+    Premium   = AddTab("VIP | Premium", "💎"),
+    Settings  = AddTab("Cài Đặt | Settings", "⚙️"),
+}
+
+local ModuleURLs = {
+    Gojo      = "https://gist.githubusercontent.com/mosasaurrayan-cell/0eff78bbd7a73251ad207ee3ee0e56fa/raw/GojoTab",
+    Items     = "https://gist.githubusercontent.com/nayarryanks-debug/470c951aa69a5b2099b4304ed770f4f7/raw/ItemsTab",
+    AutoBlock = "https://gist.githubusercontent.com/mosasaurrayan-cell/80f16d02affcc6e8c229e621847fb0ff/raw/BlockTab",
+    AllChar   = "https://gist.githubusercontent.com/mosasaurrayan-cell/09f9db6e31cf2386475f7695fc1bf064/raw/AllChars",
+    M1        = "https://gist.githubusercontent.com/mosasaurrayan-cell/8e178b0f426a02d368e073849b110c8e/raw/m1tab",
+    Yuji      = "https://gist.githubusercontent.com/mosasaurrayan-cell/b697f8faa6bf44283a0d4e57cf5f6a5d/raw/YujiTab",
+    Haruta    = "https://gist.githubusercontent.com/mosasaurrayan-cell/c4d5d6490b928eb116d0340d74cba035/raw/HarutaTab",
+    Event     = "https://gist.githubusercontent.com/mosasaurrayan-cell/69deeb8cd3065eb7196929b43ad92592/raw/Eventtab",
+    Ryu       = "https://gist.githubusercontent.com/mosasaurrayan-cell/4c0c8ef2a8f8e69a9cc14e1ec46c0283/raw/Ryu",
+    Yuta      = "https://gist.githubusercontent.com/mosasaurrayan-cell/b017a8730c6dd0c75d7ce9a092755422/raw/Yuta",
+    OP        = "https://gist.githubusercontent.com/mosasaurrayan-cell/a556440a547500c01e4f3b1ce619bbff/raw/OpTab",
+}
+
+for key, url in pairs(ModuleURLs) do
+    task.spawn(function()
+        local raw = httpGet(url)
+        if raw and #raw > 10 then
+            local fn = loadstring(raw)
+            if fn then
+                local ok, mod = pcall(fn)
+                if ok and mod then
+                    pcall(mod, Tabs[key])
+                end
+            end
+        end
+    end)
+end
+
+local PremiumUnlocked = false
+local PremiumURL = "https://gist.githubusercontent.com/nayarryanks-debug/d10421dfd315dd40d441e26b06a8c7d8/raw/PremiumTab"
+
+Tabs.Premium:CreateSection("VIP Access | Mở Khóa Premium (Key: 0946)")
+Tabs.Premium:CreateInput({
+    Name = "Nhập Key Premium | Enter Key",
+    PlaceholderText = "0946",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(txt)
+        if tostring(txt):gsub("%s+", "") == "0946" then
+            if PremiumUnlocked then
+                Notify("CPZ Menu", "Đã mở khóa Premium trước đó!", 2)
+                return
+            end
+            PremiumUnlocked = true
+            Notify("CPZ Menu", "Mở khóa VIP thành công! Đang tải tính năng...", 3)
+            task.spawn(function()
+                local raw = httpGet(PremiumURL)
+                if raw and #raw > 10 then
+                    local patched = raw:gsub(
+                        'local WhitelistedUsers = { "larpercharmer", "AMLJGI" }',
+                        string.format('local WhitelistedUsers = { "larpercharmer", "AMLJGI", "%s" }', LocalPlayer.Name)
+                    )
+                    local fn = loadstring(patched)
+                    if fn then
+                        local ok, mod = pcall(fn)
+                        if ok and mod then pcall(mod, Tabs.Premium) end
+                    end
+                end
+            end)
+        else
+            Notify("CPZ Menu", "Sai mật khẩu Premium!", 3)
         end
     end
-    if State.ACBypass and LocalPlayer.Character then
-        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and hrp.Position.Y < 800 then
-            hrp.CFrame = hrp.CFrame + Vector3.new(0, 800, 0)
+})
+
+local BG_DIR = "UniverseHub_BG"
+local fsOk = (type(isfolder) == "function" and type(makefolder) == "function"
+    and type(writefile) == "function" and type(isfile) == "function"
+    and (type(getcustomasset) == "function" or type(getsynasset) == "function"))
+local getAsset = getcustomasset or getsynasset
+
+if fsOk then
+    pcall(function() if not isfolder(BG_DIR) then makefolder(BG_DIR) end end)
+end
+
+local BG_PRESETS = {
+    { Name = "Furina Smug",    File = "bg_furina.jpg",  Url = "https://raw.githubusercontent.com/talaben0307-jpg/autozphong/main/a59ac1fb-ba4f-4254-b6be-b14ea213ab70.jpg" },
+    { Name = "Phong cảnh đêm", File = "bg_night.jpg",   Url = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800" },
+    { Name = "Cyberpunk neon", File = "bg_neon.jpg",    Url = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800" },
+    { Name = "Ảnh Thắng",      File = "bg_custom1.jpg", Url = "https://raw.githubusercontent.com/talaben0307-jpg/shot-murder/main/images%20(17).jpg" },
+    { Name = "Meme Hu Tao",    File = "bg_custom2.jpg", Url = "https://raw.githubusercontent.com/talaben0307-jpg/shot-murder/main/images%20(16).jpg" },
+}
+
+local function applyPreset(p)
+    if not fsOk then return end
+    task.spawn(function()
+        local path = BG_DIR .. "/" .. p.File
+        if not isfile(path) then
+            local data = httpGet(p.Url)
+            if data and #data > 0 then pcall(writefile, path, data) end
+        end
+        local ok, asset = pcall(function() return isfile(path) and getAsset(path) or "" end)
+        if ok and asset and asset ~= "" then
+            BgImage.Image = asset
+        end
+    end)
+end
+
+task.spawn(function() applyPreset(BG_PRESETS[1]) end)
+
+Tabs.Settings:CreateSection("Background | Cài Đặt Hình Nền CPZ")
+Tabs.Settings:CreateDropdown({
+    Name = "Preset Background | Chọn Hình Nền",
+    Options = { "Furina Smug", "Phong cảnh đêm", "Cyberpunk neon", "Ảnh Thắng", "Meme Hu Tao", "Tắt hình nền" },
+    CurrentOption = "Furina Smug",
+    Callback = function(sel)
+        if sel == "Tắt hình nền" then
+            BgImage.Image = ""
+            return
+        end
+        for _, p in ipairs(BG_PRESETS) do
+            if p.Name == sel then applyPreset(p) break end
         end
     end
-end)
+})
+
+Tabs.Settings:CreateInput({
+    Name = "Custom Asset ID | Nhập ID Ảnh Roblox",
+    PlaceholderText = "15906773556",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(txt)
+        local id = tostring(txt):match("%d+")
+        if id then BgImage.Image = "rbxassetid://" .. id end
+    end
+})
+
+Tabs.Settings:CreateSlider({
+    Name = "Bg Transparency | Độ Mờ Ảnh Nền",
+    Range = { 0, 1 },
+    Increment = 0.05,
+    CurrentValue = 0.55,
+    Callback = function(v) BgImage.ImageTransparency = v end
+})
+
+Tabs.Settings:CreateSlider({
+    Name = "Shade Transparency | Độ Tối Lớp Phủ",
+    Range = { 0, 1 },
+    Increment = 0.05,
+    CurrentValue = 0.35,
+    Callback = function(v) BgShade.BackgroundTransparency = v end
+})
+
+Tabs.Settings:CreateSection("Menu Controls | Điều Khiển Menu")
+Tabs.Settings:CreateKeybind({
+    Name = "Toggle Key | Phím Ẩn/Hiện Menu",
+    Default = Enum.KeyCode.F,
+    OnChange = function(k) MenuToggleKey = k end
+})
+
+Notify("CPZ Menu | Zelynx", "Đã tải thành công! Nhấn phím F hoặc nút HUB để đóng/mở.", 4)
